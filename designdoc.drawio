@@ -1,0 +1,75 @@
+<mxfile host="app.diagrams.net" agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36" version="24.7.17">
+  <diagram name="Page-1" id="kUMLhL1-gdYPvpoNJ9c1">
+    <mxGraphModel dx="1234" dy="1155" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="43jWea1-aHHQJwdMQThM-47" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="43jWea1-aHHQJwdMQThM-19" target="43jWea1-aHHQJwdMQThM-21">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="43jWea1-aHHQJwdMQThM-19" value="Transaction Manager" style="rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="278" y="50" width="270" height="190" as="geometry" />
+        </mxCell>
+        <mxCell id="43jWea1-aHHQJwdMQThM-25" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="43jWea1-aHHQJwdMQThM-21" target="43jWea1-aHHQJwdMQThM-26">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="413" y="356" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="43jWea1-aHHQJwdMQThM-33" style="edgeStyle=none;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="43jWea1-aHHQJwdMQThM-21" target="43jWea1-aHHQJwdMQThM-28">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="43jWea1-aHHQJwdMQThM-36" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" edge="1" parent="1" source="43jWea1-aHHQJwdMQThM-21" target="43jWea1-aHHQJwdMQThM-29">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="43jWea1-aHHQJwdMQThM-21" value="SiteCoordinator" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="353" y="270" width="120" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="43jWea1-aHHQJwdMQThM-24" value="Transaction Graph" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="353" y="170" width="120" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="43jWea1-aHHQJwdMQThM-26" value="Site" style="rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="69" y="376" width="160" height="180" as="geometry" />
+        </mxCell>
+        <mxCell id="43jWea1-aHHQJwdMQThM-28" value="Site" style="rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="333" y="376" width="160" height="180" as="geometry" />
+        </mxCell>
+        <mxCell id="43jWea1-aHHQJwdMQThM-29" value="Site" style="rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="599" y="376" width="160" height="180" as="geometry" />
+        </mxCell>
+        <mxCell id="43jWea1-aHHQJwdMQThM-30" value="Data Manager" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="89" y="486" width="120" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="43jWea1-aHHQJwdMQThM-31" value="Data Manager" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="353" y="486" width="120" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="43jWea1-aHHQJwdMQThM-32" value="Data Manager" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="619" y="486" width="120" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="43jWea1-aHHQJwdMQThM-37" value="index: int&lt;div&gt;&lt;br&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="89" y="426" width="120" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="43jWea1-aHHQJwdMQThM-38" value="index: int&lt;div&gt;&lt;br&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="353" y="426" width="120" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="43jWea1-aHHQJwdMQThM-39" value="index: int&lt;div&gt;&lt;br&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="619" y="426" width="120" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="43jWea1-aHHQJwdMQThM-40" value="TransactionMap" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="353" y="110" width="120" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="43jWea1-aHHQJwdMQThM-41" value="Transaction {&lt;div&gt;start_time: int&lt;br&gt;&lt;div&gt;operations: Map[Operation, int]&lt;/div&gt;&lt;div&gt;write_sites: List[int]&lt;/div&gt;&lt;div&gt;pending_operations: List[dict, Set[int]]&lt;/div&gt;&lt;div&gt;}&lt;/div&gt;&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;def commit() -&amp;gt; validates and commits writes to write-sites if successful, aborts otherwise.&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="90" y="610" width="210" height="230" as="geometry" />
+        </mxCell>
+        <mxCell id="43jWea1-aHHQJwdMQThM-42" value="SiteCoordinator {&lt;div&gt;sites: Map[int, Site]&lt;/div&gt;&lt;div&gt;site_uptime: Map[int, List[(int, int)]]&lt;/div&gt;&lt;div&gt;&lt;div&gt;}&lt;/div&gt;&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;def get_sites(key: int) -&amp;gt; List[int]&lt;/div&gt;&lt;div&gt;def recover_site(site: int) -&amp;gt; Brings site back up, writes a new entry to site_uptime&lt;/div&gt;&lt;div&gt;def down_site(site: int) -&amp;gt; brings site down, closes the tuple on site_uptime&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="414" y="995" width="350" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="43jWea1-aHHQJwdMQThM-43" value="TransactionManager {&lt;div&gt;transaction_map: Map[int, Transaction]&lt;/div&gt;&lt;div&gt;transaction_graph: Map[int, List[int]]&lt;/div&gt;&lt;div&gt;site_coordinator: SiteCoordinator&lt;/div&gt;&lt;div&gt;waiting_transactions: Set[Transaction]&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;def start(transaction: Tx) -&amp;gt; creates a transaction in the transaction_map and graph&lt;/div&gt;&lt;div&gt;def end(transaction: Tx) -&amp;gt; checks for rw cycles and conflicts in transaction and tries to commit transaction if possible. Removes transaction from transaction_graph and map&lt;/div&gt;&lt;div&gt;def read(transaction: Tx, key: int) -&amp;gt; Retrieves available sites for reads and attempts to read, or waits if there is possible site which is currently down.&lt;/div&gt;&lt;div&gt;def write(transaction: Tx, key: int, value: int) -&amp;gt; Attempts to write to all replicas of a site.&amp;nbsp;&lt;/div&gt;&lt;div&gt;def site_recover(site: int) -&amp;gt; starts executing operations on transactions waiting for specific site&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="380" y="585" width="350" height="360" as="geometry" />
+        </mxCell>
+        <mxCell id="43jWea1-aHHQJwdMQThM-45" value="DataManager {&lt;div&gt;values: Map[int, List[(int, int)]&lt;/div&gt;&lt;div&gt;pending_transactions: values&lt;/div&gt;&lt;div&gt;&lt;div&gt;}&lt;/div&gt;&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;def get_sites(key: int, timestamp: int) -&amp;gt; Option[int]&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="1010" width="350" height="120" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
