@@ -23,7 +23,8 @@ func Simulation(file *os.File) error {
 	for scanner.Scan() {
 		line := scanner.Text()
 		fmt.Println(line)
-		if isBegin(line) {
+		switch {
+		case isBegin(line):
 			transaction, err := extractBegin(line)
 			if err != nil {
 				return err
@@ -32,7 +33,7 @@ func Simulation(file *os.File) error {
 				fmt.Println(err)
 				return err
 			}
-		} else if isEnd(line) {
+		case isEnd(line):
 			transaction, err := extractEnd(line)
 			if err != nil {
 				return err
@@ -42,7 +43,7 @@ func Simulation(file *os.File) error {
 				return err
 			}
 			fmt.Printf("T%d %s\n", transaction, result.String())
-		} else if isWrite(line) {
+		case isWrite(line):
 			transaction, key, value, err := extractWrite(line)
 			if err != nil {
 				return err
@@ -51,7 +52,7 @@ func Simulation(file *os.File) error {
 			if err != nil {
 				return err
 			}
-		} else if isRead(line) {
+		case isRead(line):
 			transaction, key, err := extractRead(line)
 			if err != nil {
 				return err
@@ -60,28 +61,93 @@ func Simulation(file *os.File) error {
 			if err != nil {
 				return err
 			}
-			if value != -1 {
-				fmt.Println(value)
+			switch value.ResultType {
+			case domain.Success:
+				fmt.Println(value.Value)
+			case domain.Abort:
+				fmt.Printf("T%d aborts\n", transaction)
+			case domain.Wait:
+				fmt.Printf("T%d waits\n", transaction)
 			}
-		} else if isFail(line) {
+		case isFail(line):
 			site, err := extractFail(line)
 			if err != nil {
 				return err
 			}
 			siteCoordidnator.Fail(site, time)
-		} else if isRecover(line) {
+		case isRecover(line):
 			site, err := extractRecover(line)
 			if err != nil {
 				return err
 			}
 			siteCoordidnator.Recover(site, time)
 			transactionManager.Recover(site, time)
-		} else if isDump(line) {
+		case isDump(line):
 			result := siteCoordidnator.Dump()
 			fmt.Println(result)
-		} else {
+		default:
 			return fmt.Errorf("could not parse line %q", line)
 		}
+		/*
+			if isBegin(line) {
+				transaction, err := extractBegin(line)
+				if err != nil {
+					return err
+				}
+				if err = transactionManager.Begin(transaction, time); err != nil {
+					fmt.Println(err)
+					return err
+				}
+			} else if isEnd(line) {
+				transaction, err := extractEnd(line)
+				if err != nil {
+					return err
+				}
+				result, err := transactionManager.End(transaction, time)
+				if err != nil {
+					return err
+				}
+				fmt.Printf("T%d %s\n", transaction, result.String())
+			} else if isWrite(line) {
+				transaction, key, value, err := extractWrite(line)
+				if err != nil {
+					return err
+				}
+				err = transactionManager.Write(transaction, key, value, time)
+				if err != nil {
+					return err
+				}
+			} else if isRead(line) {
+				transaction, key, err := extractRead(line)
+				if err != nil {
+					return err
+				}
+				value, err := transactionManager.Read(transaction, key, time)
+				if err != nil {
+					return err
+				}
+				if value != -1 {
+					fmt.Println(value)
+				}
+			} else if isFail(line) {
+				site, err := extractFail(line)
+				if err != nil {
+					return err
+				}
+				siteCoordidnator.Fail(site, time)
+			} else if isRecover(line) {
+				site, err := extractRecover(line)
+				if err != nil {
+					return err
+				}
+				siteCoordidnator.Recover(site, time)
+				transactionManager.Recover(site, time)
+			} else if isDump(line) {
+				result := siteCoordidnator.Dump()
+				fmt.Println(result)
+			} else {
+				return fmt.Errorf("could not parse line %q", line)
+			}*/
 		time++
 	}
 	if err := scanner.Err(); err != nil {

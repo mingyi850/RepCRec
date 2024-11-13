@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/mingyi850/repcrec/internal/utils"
@@ -15,6 +16,7 @@ type SiteCoordinator interface {
 	Fail(site int, time int) error
 	Recover(site int, time int) error
 	Dump() string
+	ReadActiveSite(site int, key int, time int) (HistoricalValue, error)
 	GetSitesForKey(key int) []int
 	GetActiveSitesForKey(key int) []int
 	GetValidSitesForRead(key int, txStart int) []int
@@ -31,7 +33,7 @@ func CreateSiteCoordinator(numSites int) SiteCoordinator {
 	for i := 1; i <= numSites; i++ {
 		site := CreateDataManager(i)
 		sites[i] = &site
-		uptimes[i] = append(uptimes[i], Range{start: 0, end: -1})
+		uptimes[i] = append(uptimes[i], Range{start: -1, end: -1})
 	}
 	return &SiteCoordinatorImpl{
 		Sites:      sites,
@@ -98,6 +100,13 @@ func (s *SiteCoordinatorImpl) GetSitesForKey(key int) []int {
 	}
 }
 
+func (s *SiteCoordinatorImpl) ReadActiveSite(site int, key int, time int) (HistoricalValue, error) {
+	if !s.isActiveSite(site) {
+		return HistoricalValue{}, fmt.Errorf("Site %d is not active", site)
+	}
+	return s.Sites[site].Read(key, time), nil
+}
+
 func (s *SiteCoordinatorImpl) isActiveSite(site int) bool {
 	uptimeArr := s.SiteUptime[site]
 	return uptimeArr[len(uptimeArr)-1].end == -1
@@ -106,7 +115,7 @@ func (s *SiteCoordinatorImpl) isActiveSite(site int) bool {
 func (s *SiteCoordinatorImpl) wasAliveBetween(site int, start int, end int) bool {
 	uptimeArr := s.SiteUptime[site]
 	for _, uptime := range uptimeArr {
-		if uptime.start <= start && (uptime.end >= end || uptime.end == -1) {
+		if (uptime.start <= start) && (uptime.end >= end || uptime.end == -1) {
 			return true
 		}
 	}

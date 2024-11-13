@@ -2,10 +2,6 @@ package domain
 
 import "fmt"
 
-type CommitResult struct {
-	success bool
-}
-
 type OperationType string
 
 const (
@@ -29,6 +25,10 @@ type Transaction struct {
 	completedOperations []Operation
 }
 
+type CommitResult struct {
+	success bool
+}
+
 func (result CommitResult) String() string {
 	if result.success {
 		return "commits"
@@ -36,11 +36,24 @@ func (result CommitResult) String() string {
 	return "aborts"
 }
 
+type ReadResultType string
+
+const (
+	Abort   ReadResultType = "abort"
+	Wait    ReadResultType = "wait"
+	Success ReadResultType = "success"
+)
+
+type ReadResult struct {
+	Value      int
+	ResultType ReadResultType
+}
+
 type TransactionManager interface {
 	Begin(tx int, time int) error
 	End(tx int, time int) (CommitResult, error) // Either "commit" or "abort"
 	Write(tx int, key int, value int, time int) error
-	Read(tx int, key int, time int) (int, error) // Returns read value if available
+	Read(tx int, key int, time int) (ReadResult, error) // Returns read value if available
 	Recover(site int, time int) error
 }
 
@@ -63,7 +76,7 @@ func CreateTransactionManager(SiteCoordinator SiteCoordinator) TransactionManage
 func (t *TransactionManagerImpl) Begin(tx int, time int) error {
 	t.TransactionMap[tx] = Transaction{
 		id:                tx,
-		startTime:         0,
+		startTime:         time,
 		siteWrites:        make(map[int]Operation),
 		pendingOperations: make([]Operation, 0),
 	}
@@ -79,14 +92,45 @@ func (t *TransactionManagerImpl) Write(tx int, key int, value int, time int) err
 	return nil
 }
 
-func (t *TransactionManagerImpl) Read(tx int, key int, time int) (int, error) {
-	siteList := t.SiteCoordinator.GetValidSitesForRead(key, time)
-	fmt.Println(siteList)
-	return 0, nil
+func (t *TransactionManagerImpl) Read(tx int, key int, time int) (ReadResult, error) {
+	transaction, waiting, err := t.getTransaction(tx)
+	if err != nil {
+		return ReadResult{-1, Abort}, err
+	}
+	if waiting {
+		t.appendWaitingOperation(tx, Operation{Read, key, 0, time})
+		return ReadResult{-1, Wait}, nil
+	}
+	siteList := t.SiteCoordinator.GetValidSitesForRead(key, transaction.startTime)
+	if len(siteList) == 0 {
+		// Add Abort logic here
+		return ReadResult{-1, Abort}, nil
+	}
+	for _, site := range siteList {
+		value, err := t.SiteCoordinator.ReadActiveSite(site, key, time)
+		if err == nil {
+			return ReadResult{value.value, Success}, nil
+		}
+	}
+	return ReadResult{-1, Wait}, nil
 }
 
 func (t *TransactionManagerImpl) Recover(site int, time int) error {
 	return nil
+}
+
+func (t *TransactionManagerImpl) getTransaction(tx int) (Transaction, bool, error) {
+	transaction, exists := t.TransactionMap[tx]
+	if !exists {
+		return Transaction{}, false, fmt.Errorf("Transaction %d does not exist", tx)
+	}
+	_, waiting := t.WaitingTransactions[tx]
+	return transaction, waiting, nil
+}
+
+func (t *TransactionManagerImpl) appendWaitingOperation(tx int, operation Operation) {
+	transaction, _ := t.TransactionMap[tx]
+	transaction.pendingOperations = append(transaction.pendingOperations, operation)
 }
 
 /*
@@ -118,4 +162,7 @@ Aborts:
 1. Remove transaction from TransactionMap
 2. Remove transaction from TransactionGraph - set all outgoing edges to nil
 
+Recover:
+1. For each waiting site, check if we can continue.
+2. If yes, run all operations on site in pendingOperations.
 */
