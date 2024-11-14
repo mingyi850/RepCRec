@@ -30,9 +30,24 @@ type Transaction struct {
 	waitingSites        map[int]bool
 }
 
+type OperationResultType string
+
+const (
+	Abort   OperationResultType = "abort"
+	Wait    OperationResultType = "wait"
+	Success OperationResultType = "success"
+	Waiting OperationResultType = "waiting"
+)
+
 type CommitResult struct {
+	// TODO: Change handlign of commit result
 	success bool
 	waiting bool
+}
+
+type WriteResult struct {
+	ResultType OperationResultType
+	Sites      []int
 }
 
 func (result CommitResult) String() string {
@@ -42,24 +57,15 @@ func (result CommitResult) String() string {
 	return "aborts"
 }
 
-type ReadResultType string
-
-const (
-	Abort   ReadResultType = "abort"
-	Wait    ReadResultType = "wait"
-	Success ReadResultType = "success"
-	Waiting ReadResultType = "waiting"
-)
-
 type ReadResult struct {
 	Value      int
-	ResultType ReadResultType
+	ResultType OperationResultType
 }
 
 type TransactionManager interface {
 	Begin(tx int, time int) error
 	End(tx int, time int) (CommitResult, error) // Either "commit" or "abort"
-	Write(tx int, key int, value int, time int) error
+	Write(tx int, key int, value int, time int) (WriteResult, error)
 	Read(tx int, key int, time int) (ReadResult, error) // Returns read value if available
 	Recover(site int, time int) error
 }
@@ -105,8 +111,28 @@ func (t *TransactionManagerImpl) End(tx int, time int) (CommitResult, error) {
 	return CommitResult{commitSuccess, false}, nil
 }
 
-func (t *TransactionManagerImpl) Write(tx int, key int, value int, time int) error {
-	return nil
+func (t *TransactionManagerImpl) Write(tx int, key int, value int, time int) (WriteResult, error) {
+	transaction, waiting, err := t.getTransaction(tx)
+	if err != nil {
+		return WriteResult{Abort, []int{}}, err
+	}
+	if waiting {
+		t.appendWaitingOperation(tx, Operation{Write, key, value, time})
+		return WriteResult{Waiting, []int{}}, nil
+	}
+	writeSites := t.SiteCoordinator.GetActiveSitesForKey(key)
+	if len(writeSites) == 0 {
+		return WriteResult{Wait, writeSites}, nil
+	}
+	if err != nil {
+		return WriteResult{Success, writeSites}, err
+	}
+	for _, site := range writeSites {
+		t.appendSiteWrite(transaction, site, key, value, time)
+	}
+	t.appendCompletedOperation(tx, Operation{Write, key, value, time})
+	return WriteResult{Success, writeSites}, nil
+
 }
 
 func (t *TransactionManagerImpl) Read(tx int, key int, time int) (ReadResult, error) {
@@ -165,10 +191,11 @@ func (t *TransactionManagerImpl) runPendingOperations(tx *Transaction, recoverTi
 	for index, operation := range tx.pendingOperations {
 		switch operation.operationType {
 		case Write:
-			err := t.Write(tx.id, operation.key, operation.value, recoverTime)
+			result, err := t.Write(tx.id, operation.key, operation.value, recoverTime)
 			if err != nil {
 				return err
 			}
+			HandleWriteResult(tx.id, operation.key, result)
 		case Read:
 			value, err := t.Read(tx.id, operation.key, recoverTime)
 			if err != nil {
@@ -255,10 +282,28 @@ func (t *TransactionManagerImpl) appendCompletedOperation(tx int, operation Oper
 	return nil
 }
 
+func (t *TransactionManagerImpl) appendSiteWrite(transaction *Transaction, site int, key int, value int, time int) error {
+	transaction.siteWrites[site] = Operation{Write, key, value, time}
+	return nil
+}
+
 func HandleReadResult(tx int, key int, result ReadResult) {
 	switch result.ResultType {
 	case Success:
 		utils.LogRead(tx, key, result.Value)
+	case Abort:
+		utils.LogAbort(tx)
+	case Wait:
+		utils.LogWait(tx)
+	case Waiting:
+		utils.LogWaiting(tx)
+	}
+}
+
+func HandleWriteResult(tx int, key int, result WriteResult) {
+	switch result.ResultType {
+	case Success:
+		utils.LogWrite(tx, key, result.Sites)
 	case Abort:
 		utils.LogAbort(tx)
 	case Wait:

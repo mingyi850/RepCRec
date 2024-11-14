@@ -48,10 +48,11 @@ func Simulation(file *os.File) error {
 			if err != nil {
 				return err
 			}
-			err = transactionManager.Write(transaction, key, value, time)
+			result, err := transactionManager.Write(transaction, key, value, time)
 			if err != nil {
 				return err
 			}
+			domain.HandleWriteResult(transaction, key, result)
 		case isRead(line):
 			transaction, key, err := extractRead(line)
 			if err != nil {

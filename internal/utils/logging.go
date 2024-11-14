@@ -24,6 +24,6 @@ func LogCommit(transaction int) {
 	fmt.Printf("T%d commits\n", transaction)
 }
 
-func LogWrite(transaction int, key int, value int) {
-	fmt.Printf("T%d - x%d: %d\n", transaction, key, value)
+func LogWrite(transaction int, key int, sites []int) {
+	fmt.Printf("T%d - x%d: %v\n", transaction, key, sites)
 }
