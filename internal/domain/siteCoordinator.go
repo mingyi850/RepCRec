@@ -29,6 +29,7 @@ type SiteCoordinator interface {
 	GetActiveSitesForKey(key int) []int
 	GetValidSitesForRead(key int, txStart int) []int
 	VerifySiteWrite(site int, key int, writeTime int, currentTime int) SiteCommitResult
+	CommitSiteWrite(site int, key int, value int, time int) error
 }
 
 type SiteCoordinatorImpl struct {
@@ -36,7 +37,7 @@ type SiteCoordinatorImpl struct {
 	SiteUptime map[int]([]Range)
 }
 
-func CreateSiteCoordinator(numSites int) SiteCoordinator {
+func CreateSiteCoordinator(numSites int) *SiteCoordinatorImpl {
 	sites := make(map[int]DataManager)
 	uptimes := make(map[int]([]Range))
 	for i := 1; i <= numSites; i++ {
@@ -52,7 +53,6 @@ func CreateSiteCoordinator(numSites int) SiteCoordinator {
 
 func (s *SiteCoordinatorImpl) Fail(site int, time int) error {
 	if s.isActiveSite(site) {
-		s.Sites[site].Fail()
 		uptimeArr := s.SiteUptime[site]
 		uptimeArr[len(uptimeArr)-1].end = time
 	}
@@ -116,12 +116,6 @@ func (s *SiteCoordinatorImpl) ReadActiveSite(site int, key int, time int) (Histo
 	return s.Sites[site].Read(key, time), nil
 }
 
-/*
- 1. Make sure site has been up since the write time.
- 2. Read last committed value for the key
- 3. Make sure last committed value timestamp is less than the write.
-    If any of the above fails, abort.
-*/
 func (s *SiteCoordinatorImpl) VerifySiteWrite(site int, key int, writeTime int, currentTime int) SiteCommitResult {
 	if !s.wasAliveBetween(site, writeTime, currentTime) {
 		return SiteDown
@@ -132,6 +126,12 @@ func (s *SiteCoordinatorImpl) VerifySiteWrite(site int, key int, writeTime int, 
 	} else {
 		return SiteStale
 	}
+}
+
+func (s *SiteCoordinatorImpl) CommitSiteWrite(site int, key int, value int, currentTime int) error {
+	dataManager := s.Sites[site]
+	dataManager.Commit(key, value, currentTime)
+	return nil
 }
 
 func (s *SiteCoordinatorImpl) isActiveSite(site int) bool {

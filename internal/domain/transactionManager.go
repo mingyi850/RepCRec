@@ -41,7 +41,7 @@ const (
 
 type CommitResult struct {
 	ResultType OperationResultType
-	reason     CommitResultReason
+	reason     string
 }
 
 type WriteResult struct {
@@ -100,17 +100,6 @@ func (t *TransactionManagerImpl) Begin(tx int, time int) error {
 }
 
 /*
-For Commit:
- 1. Check all writes made by transaction.
- 2. For each write (sites, key, value, time) do for each site:
-
-For each site:
-
- 1. Make sure site has been up since the write time.
- 2. Read last committed value for the key
- 3. Make sure last committed value timestamp is less than the write.
-    If any of the above fails, abort.
-
 Tx Graph Check: Check for cycles in Transaction Graph. If cycle is found, abort.
 
 If all pass:
@@ -123,18 +112,24 @@ func (t *TransactionManagerImpl) End(tx int, time int) (CommitResult, error) {
 	}
 	if waiting {
 		transaction.appendWaitingOperation(Operation{End, 0, 0, time})
-		return CommitResult{Waiting, "Transaction is waiting"}, nil
+		return CommitResult{Waiting, ""}, nil
 	}
 	for site, operation := range transaction.siteWrites {
 		result := t.SiteCoordinator.VerifySiteWrite(site, operation.key, operation.time, time)
 		switch result {
 		case SiteDown:
-			return CommitResult{Abort, CommitSiteDown}, nil
+			return CommitResult{Abort, fmt.Sprintf("Site %d was down between write to x%d and commit", site, operation.key)}, nil
 		case SiteStale:
-			return CommitResult{Abort, CommitSiteStale}, nil
+			return CommitResult{Abort, fmt.Sprintf("Write to x%d was stale at site %d", operation.key, site)}, nil
 		case SiteOk:
 			continue
 		}
+	}
+	// Check for RW cycles in Transaction Graph
+	// Commit all values in transaction and remove
+	err = t.commitTransaction(tx, time)
+	if err != nil {
+		return CommitResult{Abort, err.Error()}, nil
 	}
 	return CommitResult{Success, ""}, nil
 }
@@ -166,12 +161,11 @@ func (t *TransactionManagerImpl) Read(tx int, key int, time int) (ReadResult, er
 	}
 	if waiting {
 		transaction.appendWaitingOperation(Operation{Read, key, 0, time})
-		fmt.Println("Appended waiting transaction", tx)
 		return ReadResult{-1, Waiting}, nil
 	}
 	siteList := t.SiteCoordinator.GetValidSitesForRead(key, transaction.startTime)
 	if len(siteList) == 0 {
-		// Add Abort logic here
+		t.removeTransaction(tx)
 		return ReadResult{-1, Abort}, nil
 	}
 	for _, site := range siteList {
@@ -183,12 +177,12 @@ func (t *TransactionManagerImpl) Read(tx int, key int, time int) (ReadResult, er
 	}
 	// Wait transaction logic
 	err = t.waitTransaction(tx, siteList)
+	transaction.appendWaitingOperation(Operation{Read, key, 0, time})
 	return ReadResult{-1, Wait}, err
 }
 
 func (t *TransactionManagerImpl) Recover(site int, time int) error {
 	for tx := range t.WaitingTransactions {
-		fmt.Println("Waiting transaction", tx, "on sites", utils.GetMapKeys(t.TransactionMap[tx].waitingSites))
 		transaction, waiting, err := t.getTransaction(tx)
 		if err != nil {
 			return err
@@ -208,6 +202,24 @@ func (t *TransactionManagerImpl) Recover(site int, time int) error {
 			}
 		}
 	}
+	return nil
+}
+
+func (t *TransactionManagerImpl) commitTransaction(tx int, currentTime int) error {
+	transaction, waiting, err := t.getTransaction(tx)
+	if err != nil {
+		return err
+	}
+	if waiting {
+		return fmt.Errorf("Transaction %d is waiting", tx)
+	}
+	for site, operation := range transaction.siteWrites {
+		err := t.SiteCoordinator.CommitSiteWrite(site, operation.key, operation.value, currentTime)
+		if err != nil {
+			return err
+		}
+	}
+	t.removeTransaction(tx)
 	return nil
 }
 
@@ -278,6 +290,12 @@ func (t *TransactionManagerImpl) runPendingOperations(tx *Transaction, recoverTi
 	return nil
 }
 
+func (t *TransactionManagerImpl) removeTransaction(tx int) {
+	delete(t.TransactionMap, tx)
+	delete(t.WaitingTransactions, tx)
+	delete(t.TransactionGraph, tx)
+}
+
 func (tx *Transaction) appendWaitingOperation(operation Operation) error {
 	tx.pendingOperations = append(tx.pendingOperations, operation)
 	return nil
@@ -302,7 +320,7 @@ func HandleReadResult(tx int, key int, result ReadResult) {
 	case Success:
 		utils.LogRead(tx, key, result.Value)
 	case Abort:
-		utils.LogAbort(tx)
+		utils.LogAbort(tx, "")
 	case Wait:
 		utils.LogWait(tx)
 	case Waiting:
@@ -315,7 +333,7 @@ func HandleWriteResult(tx int, key int, result WriteResult) {
 	case Success:
 		utils.LogWrite(tx, key, result.Sites)
 	case Abort:
-		utils.LogAbort(tx)
+		utils.LogAbort(tx, "")
 	case Wait:
 		utils.LogWait(tx)
 	case Waiting:
@@ -328,7 +346,7 @@ func HandleCommitResult(tx int, result CommitResult) {
 	case Success:
 		utils.LogCommit(tx)
 	case Abort:
-		utils.LogAbort(tx)
+		utils.LogAbort(tx, result.reason)
 	case Wait:
 		utils.LogWait(tx)
 	case Waiting:

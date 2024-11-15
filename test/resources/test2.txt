@@ -1,0 +1,8 @@
+/* 
+Test that Read and Write to replicated data works
+*/
+
+begin(T1)
+R(T1, x4)
+W(T1, x4, 111)
+end(T1)

@@ -13,6 +13,10 @@ type HistoricalValue struct {
 	time  int
 }
 
+func (h HistoricalValue) GetValue() int {
+	return h.value
+}
+
 type PendingWrite struct {
 	key   int
 	value int
@@ -21,15 +25,13 @@ type PendingWrite struct {
 
 func CreateDataManager(siteId int) DataManagerImpl {
 	result := DataManagerImpl{
-		siteId:            siteId,
-		commitedValues:    initValuesMap(siteId),
-		transactionWrites: make(map[int]map[int]PendingWrite),
+		siteId:         siteId,
+		commitedValues: initValuesMap(siteId),
 	}
 	return result
 }
 
 type DataManager interface {
-	Fail()
 	Dump() string // Returns the current state of the data manager
 	Read(key int, time int) HistoricalValue
 	Commit(key int, value int, time int) error
@@ -37,13 +39,8 @@ type DataManager interface {
 }
 
 type DataManagerImpl struct {
-	siteId            int
-	commitedValues    map[int][]HistoricalValue
-	transactionWrites map[int]map[int]PendingWrite //{key: {tid: write}} MAY DELETE
-}
-
-func (d *DataManagerImpl) Fail() {
-	d.transactionWrites = make(map[int]map[int]PendingWrite)
+	siteId         int
+	commitedValues map[int][]HistoricalValue
 }
 
 func (d *DataManagerImpl) Dump() string {

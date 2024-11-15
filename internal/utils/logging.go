@@ -8,8 +8,12 @@ func LogRead(transaction int, key int, value int) {
 	fmt.Printf("x%d: %d\n", key, value)
 }
 
-func LogAbort(transaction int) {
-	fmt.Printf("T%d aborts\n", transaction)
+func LogAbort(transaction int, reason string) {
+	if reason == "" {
+		fmt.Printf("T%d aborts\n", transaction)
+	} else {
+		fmt.Printf("T%d aborts: %s\n", transaction, reason)
+	}
 }
 
 func LogWait(transaction int) {

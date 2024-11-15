@@ -11,19 +11,28 @@ import (
 	"github.com/mingyi850/repcrec/internal/domain"
 )
 
-type TransasctionManager = domain.TransactionManagerImpl
-type SiteCoordinator = domain.SiteCoordinatorImpl
+//type TransasctionManager = domain.TransactionManagerImpl
+//type SiteCoordinator = domain.SiteCoordinatorImpl
 
-func Simulation(file *os.File) error {
-	siteCoordidnator := domain.CreateSiteCoordinator(10)
-	transactionManager := domain.CreateTransactionManager(siteCoordidnator)
-
+func Simulation(file *os.File, siteCoordinator domain.SiteCoordinator, transactionManager domain.TransactionManager) error {
 	time := 1
 	scanner := bufio.NewScanner(file)
+	commentFlag := false
 	for scanner.Scan() {
 		line := scanner.Text()
 		fmt.Println(line)
 		switch {
+		case isCommentStart(line):
+			commentFlag = true
+			time--
+		case isCommentEnd(line):
+			commentFlag = false
+			time--
+		case isComment(line, commentFlag):
+			time--
+			continue
+		case line == "": //Skip empty lines
+			time--
 		case isBegin(line):
 			transaction, err := extractBegin(line)
 			if err != nil {
@@ -68,16 +77,16 @@ func Simulation(file *os.File) error {
 			if err != nil {
 				return err
 			}
-			siteCoordidnator.Fail(site, time)
+			siteCoordinator.Fail(site, time)
 		case isRecover(line):
 			site, err := extractRecover(line)
 			if err != nil {
 				return err
 			}
-			siteCoordidnator.Recover(site, time)
+			siteCoordinator.Recover(site, time)
 			transactionManager.Recover(site, time)
 		case isDump(line):
-			result := siteCoordidnator.Dump()
+			result := siteCoordinator.Dump()
 			fmt.Println(result)
 		default:
 			return fmt.Errorf("could not parse line %q", line)
@@ -90,6 +99,16 @@ func Simulation(file *os.File) error {
 	return nil
 }
 
+func isCommentStart(line string) bool {
+	return strings.HasPrefix(line, "/*")
+}
+
+func isCommentEnd(line string) bool {
+	return strings.HasSuffix(line, "*/")
+}
+func isComment(line string, commentFlag bool) bool {
+	return commentFlag || strings.HasPrefix(line, "//")
+}
 func isBegin(line string) bool {
 	return strings.HasPrefix(line, "begin")
 }

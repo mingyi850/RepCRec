@@ -1,0 +1,8 @@
+/* 
+Test that Read and Write to single copy works
+*/
+
+begin(T1)
+R(T1, x3)
+W(T1, x3, 111)
+end(T1)

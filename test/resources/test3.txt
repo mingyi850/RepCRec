@@ -1,0 +1,9 @@
+/* 
+Test that Operations must be preceeded by a begin 
+*/
+
+begin(T1)
+R(T1, x4)
+W(T1, x4, 111)
+W(T2, x4, 222)
+end(T1)

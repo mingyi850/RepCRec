@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/mingyi850/repcrec/internal"
+	"github.com/mingyi850/repcrec/internal/domain"
 )
 
 func main() {
@@ -20,7 +21,9 @@ func main() {
 	}
 	defer file.Close()
 	// Read file line by line
-	error := internal.Simulation(file)
+	siteCoordinator := domain.CreateSiteCoordinator(10)
+	transactionManager := domain.CreateTransactionManager(siteCoordinator)
+	error := internal.Simulation(file, siteCoordinator, transactionManager)
 	if error != nil {
 		fmt.Println(error)
 	}
