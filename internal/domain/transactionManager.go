@@ -40,21 +40,12 @@ const (
 )
 
 type CommitResult struct {
-	// TODO: Change handlign of commit result
-	success bool
-	waiting bool
+	ResultType OperationResultType
 }
 
 type WriteResult struct {
 	ResultType OperationResultType
 	Sites      []int
-}
-
-func (result CommitResult) String() string {
-	if result.success {
-		return "commits"
-	}
-	return "aborts"
 }
 
 type ReadResult struct {
@@ -99,16 +90,15 @@ func (t *TransactionManagerImpl) Begin(tx int, time int) error {
 }
 
 func (t *TransactionManagerImpl) End(tx int, time int) (CommitResult, error) {
-	_, waiting, err := t.getTransaction(tx)
+	transaction, waiting, err := t.getTransaction(tx)
 	if err != nil {
-		return CommitResult{false, false}, err
+		return CommitResult{Wait}, err
 	}
 	if waiting {
-		t.appendWaitingOperation(tx, Operation{End, 0, 0, time})
-		return CommitResult{false, true}, nil
+		transaction.appendWaitingOperation(Operation{End, 0, 0, time})
+		return CommitResult{Waiting}, nil
 	}
-	commitSuccess := true
-	return CommitResult{commitSuccess, false}, nil
+	return CommitResult{Success}, nil
 }
 
 func (t *TransactionManagerImpl) Write(tx int, key int, value int, time int) (WriteResult, error) {
@@ -117,7 +107,7 @@ func (t *TransactionManagerImpl) Write(tx int, key int, value int, time int) (Wr
 		return WriteResult{Abort, []int{}}, err
 	}
 	if waiting {
-		t.appendWaitingOperation(tx, Operation{Write, key, value, time})
+		transaction.appendWaitingOperation(Operation{Write, key, value, time})
 		return WriteResult{Waiting, []int{}}, nil
 	}
 	writeSites := t.SiteCoordinator.GetActiveSitesForKey(key)
@@ -128,9 +118,9 @@ func (t *TransactionManagerImpl) Write(tx int, key int, value int, time int) (Wr
 		return WriteResult{Success, writeSites}, err
 	}
 	for _, site := range writeSites {
-		t.appendSiteWrite(transaction, site, key, value, time)
+		transaction.appendSiteWrite(site, key, value, time)
 	}
-	t.appendCompletedOperation(tx, Operation{Write, key, value, time})
+	transaction.appendCompletedOperation(Operation{Write, key, value, time})
 	return WriteResult{Success, writeSites}, nil
 
 }
@@ -141,7 +131,7 @@ func (t *TransactionManagerImpl) Read(tx int, key int, time int) (ReadResult, er
 		return ReadResult{-1, Abort}, err
 	}
 	if waiting {
-		t.appendWaitingOperation(tx, Operation{Read, key, 0, time})
+		transaction.appendWaitingOperation(Operation{Read, key, 0, time})
 		fmt.Println("Appended waiting transaction", tx)
 		return ReadResult{-1, Waiting}, nil
 	}
@@ -153,7 +143,7 @@ func (t *TransactionManagerImpl) Read(tx int, key int, time int) (ReadResult, er
 	for _, site := range siteList {
 		value, err := t.SiteCoordinator.ReadActiveSite(site, key, time)
 		if err == nil {
-			t.appendCompletedOperation(tx, Operation{Read, key, value.value, time})
+			transaction.appendCompletedOperation(Operation{Read, key, value.value, time})
 			return ReadResult{value.value, Success}, nil
 		}
 	}
@@ -185,40 +175,6 @@ func (t *TransactionManagerImpl) Recover(site int, time int) error {
 		}
 	}
 	return nil
-}
-
-func (t *TransactionManagerImpl) runPendingOperations(tx *Transaction, recoverTime int) error {
-	for index, operation := range tx.pendingOperations {
-		switch operation.operationType {
-		case Write:
-			result, err := t.Write(tx.id, operation.key, operation.value, recoverTime)
-			if err != nil {
-				return err
-			}
-			HandleWriteResult(tx.id, operation.key, result)
-		case Read:
-			value, err := t.Read(tx.id, operation.key, recoverTime)
-			if err != nil {
-				return err
-			}
-			HandleReadResult(tx.id, operation.key, value)
-			if value.ResultType != Success {
-				t.truncatePendingOperations(tx, index)
-				return nil
-			}
-		case End:
-			result, err := t.End(tx.id, recoverTime)
-			if err != nil {
-				return err
-			}
-			HandleCommitResult(tx.id, result)
-		}
-	}
-	return nil
-}
-
-func (t *TransactionManagerImpl) truncatePendingOperations(tx *Transaction, index int) {
-	tx.pendingOperations = tx.pendingOperations[index:]
 }
 
 func (t *TransactionManagerImpl) getTransaction(tx int) (*Transaction, bool, error) {
@@ -258,33 +214,53 @@ func (t *TransactionManagerImpl) unwaitTransaction(tx int) error {
 	return nil
 }
 
-func (t *TransactionManagerImpl) appendWaitingOperation(tx int, operation Operation) error {
-	transaction, waiting, err := t.getTransaction(tx)
-	if err != nil {
-		return err
+func (t *TransactionManagerImpl) runPendingOperations(tx *Transaction, recoverTime int) error {
+	for index, operation := range tx.pendingOperations {
+		switch operation.operationType {
+		case Write:
+			result, err := t.Write(tx.id, operation.key, operation.value, recoverTime)
+			if err != nil {
+				return err
+			}
+			HandleWriteResult(tx.id, operation.key, result)
+		case Read:
+			value, err := t.Read(tx.id, operation.key, recoverTime)
+			if err != nil {
+				return err
+			}
+			HandleReadResult(tx.id, operation.key, value)
+			if value.ResultType != Success {
+				tx.truncatePendingOperations(index) //Wait or Abort
+				return nil
+			}
+		case End:
+			result, err := t.End(tx.id, recoverTime)
+			if err != nil {
+				return err
+			}
+			HandleCommitResult(tx.id, result)
+		}
 	}
-	if !waiting {
-		return fmt.Errorf("Transaction %d is not waiting", tx)
-	}
-	transaction.pendingOperations = append(transaction.pendingOperations, operation)
 	return nil
 }
 
-func (t *TransactionManagerImpl) appendCompletedOperation(tx int, operation Operation) error {
-	transaction, waiting, err := t.getTransaction(tx)
-	if err != nil {
-		return err
-	}
-	if waiting {
-		return fmt.Errorf("Transaction %d is waiting", tx)
-	}
-	transaction.completedOperations = append(transaction.completedOperations, operation)
+func (tx *Transaction) appendWaitingOperation(operation Operation) error {
+	tx.pendingOperations = append(tx.pendingOperations, operation)
 	return nil
 }
 
-func (t *TransactionManagerImpl) appendSiteWrite(transaction *Transaction, site int, key int, value int, time int) error {
-	transaction.siteWrites[site] = Operation{Write, key, value, time}
+func (tx *Transaction) appendCompletedOperation(operation Operation) error {
+	tx.completedOperations = append(tx.completedOperations, operation)
 	return nil
+}
+
+func (tx *Transaction) appendSiteWrite(site int, key int, value int, time int) error {
+	tx.siteWrites[site] = Operation{Write, key, value, time}
+	return nil
+}
+
+func (tx *Transaction) truncatePendingOperations(index int) {
+	tx.pendingOperations = tx.pendingOperations[index:]
 }
 
 func HandleReadResult(tx int, key int, result ReadResult) {
@@ -314,14 +290,15 @@ func HandleWriteResult(tx int, key int, result WriteResult) {
 }
 
 func HandleCommitResult(tx int, result CommitResult) {
-	if result.waiting {
-		utils.LogWaiting(tx)
-		return
-	}
-	if result.success {
+	switch result.ResultType {
+	case Success:
 		utils.LogCommit(tx)
-	} else {
+	case Abort:
 		utils.LogAbort(tx)
+	case Wait:
+		utils.LogWait(tx)
+	case Waiting:
+		utils.LogWaiting(tx)
 	}
 }
 
