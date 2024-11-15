@@ -7,6 +7,14 @@ import (
 	"github.com/mingyi850/repcrec/internal/utils"
 )
 
+type SiteCommitResult string
+
+const (
+	SiteOk    SiteCommitResult = "success"
+	SiteDown  SiteCommitResult = "down"
+	SiteStale SiteCommitResult = "stale"
+)
+
 type Range struct {
 	start int
 	end   int
@@ -20,6 +28,7 @@ type SiteCoordinator interface {
 	GetSitesForKey(key int) []int
 	GetActiveSitesForKey(key int) []int
 	GetValidSitesForRead(key int, txStart int) []int
+	VerifySiteWrite(site int, key int, writeTime int, currentTime int) SiteCommitResult
 }
 
 type SiteCoordinatorImpl struct {
@@ -102,9 +111,27 @@ func (s *SiteCoordinatorImpl) GetSitesForKey(key int) []int {
 
 func (s *SiteCoordinatorImpl) ReadActiveSite(site int, key int, time int) (HistoricalValue, error) {
 	if !s.isActiveSite(site) {
-		return HistoricalValue{}, fmt.Errorf("Site %d is not active", site)
+		return HistoricalValue{}, fmt.Errorf("site %d is not active", site)
 	}
 	return s.Sites[site].Read(key, time), nil
+}
+
+/*
+ 1. Make sure site has been up since the write time.
+ 2. Read last committed value for the key
+ 3. Make sure last committed value timestamp is less than the write.
+    If any of the above fails, abort.
+*/
+func (s *SiteCoordinatorImpl) VerifySiteWrite(site int, key int, writeTime int, currentTime int) SiteCommitResult {
+	if !s.wasAliveBetween(site, writeTime, currentTime) {
+		return SiteDown
+	}
+	committedValue := s.Sites[site].GetLastCommitted(key)
+	if committedValue.time < writeTime {
+		return SiteOk
+	} else {
+		return SiteStale
+	}
 }
 
 func (s *SiteCoordinatorImpl) isActiveSite(site int) bool {

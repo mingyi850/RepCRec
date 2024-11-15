@@ -21,15 +21,6 @@ type Operation struct {
 	time          int
 }
 
-type Transaction struct {
-	id                  int
-	startTime           int
-	siteWrites          map[int]Operation
-	pendingOperations   []Operation
-	completedOperations []Operation
-	waitingSites        map[int]bool
-}
-
 type OperationResultType string
 
 const (
@@ -39,8 +30,18 @@ const (
 	Waiting OperationResultType = "waiting"
 )
 
+type CommitResultReason string
+
+const (
+	CommitSiteDown  CommitResultReason = "down"
+	CommitSiteStale CommitResultReason = "stale"
+	RWCycle         CommitResultReason = "rw_cycle"
+	CommitOK        CommitResultReason = "ok"
+)
+
 type CommitResult struct {
 	ResultType OperationResultType
+	reason     CommitResultReason
 }
 
 type WriteResult struct {
@@ -51,6 +52,15 @@ type WriteResult struct {
 type ReadResult struct {
 	Value      int
 	ResultType OperationResultType
+}
+
+type Transaction struct {
+	id                  int
+	startTime           int
+	siteWrites          map[int]Operation
+	pendingOperations   []Operation
+	completedOperations []Operation
+	waitingSites        map[int]bool
 }
 
 type TransactionManager interface {
@@ -89,16 +99,44 @@ func (t *TransactionManagerImpl) Begin(tx int, time int) error {
 	return nil
 }
 
+/*
+For Commit:
+ 1. Check all writes made by transaction.
+ 2. For each write (sites, key, value, time) do for each site:
+
+For each site:
+
+ 1. Make sure site has been up since the write time.
+ 2. Read last committed value for the key
+ 3. Make sure last committed value timestamp is less than the write.
+    If any of the above fails, abort.
+
+Tx Graph Check: Check for cycles in Transaction Graph. If cycle is found, abort.
+
+If all pass:
+ 1. Commit all writes
+*/
 func (t *TransactionManagerImpl) End(tx int, time int) (CommitResult, error) {
 	transaction, waiting, err := t.getTransaction(tx)
 	if err != nil {
-		return CommitResult{Wait}, err
+		return CommitResult{Wait, ""}, err
 	}
 	if waiting {
 		transaction.appendWaitingOperation(Operation{End, 0, 0, time})
-		return CommitResult{Waiting}, nil
+		return CommitResult{Waiting, "Transaction is waiting"}, nil
 	}
-	return CommitResult{Success}, nil
+	for site, operation := range transaction.siteWrites {
+		result := t.SiteCoordinator.VerifySiteWrite(site, operation.key, operation.time, time)
+		switch result {
+		case SiteDown:
+			return CommitResult{Abort, CommitSiteDown}, nil
+		case SiteStale:
+			return CommitResult{Abort, CommitSiteStale}, nil
+		case SiteOk:
+			continue
+		}
+	}
+	return CommitResult{Success, ""}, nil
 }
 
 func (t *TransactionManagerImpl) Write(tx int, key int, value int, time int) (WriteResult, error) {
@@ -114,15 +152,11 @@ func (t *TransactionManagerImpl) Write(tx int, key int, value int, time int) (Wr
 	if len(writeSites) == 0 {
 		return WriteResult{Wait, writeSites}, nil
 	}
-	if err != nil {
-		return WriteResult{Success, writeSites}, err
-	}
 	for _, site := range writeSites {
-		transaction.appendSiteWrite(site, key, value, time)
+		transaction.addSiteWrite(site, key, value, time)
 	}
 	transaction.appendCompletedOperation(Operation{Write, key, value, time})
 	return WriteResult{Success, writeSites}, nil
-
 }
 
 func (t *TransactionManagerImpl) Read(tx int, key int, time int) (ReadResult, error) {
@@ -254,7 +288,7 @@ func (tx *Transaction) appendCompletedOperation(operation Operation) error {
 	return nil
 }
 
-func (tx *Transaction) appendSiteWrite(site int, key int, value int, time int) error {
+func (tx *Transaction) addSiteWrite(site int, key int, value int, time int) error {
 	tx.siteWrites[site] = Operation{Write, key, value, time}
 	return nil
 }

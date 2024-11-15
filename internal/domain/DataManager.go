@@ -33,7 +33,7 @@ type DataManager interface {
 	Dump() string // Returns the current state of the data manager
 	Read(key int, time int) HistoricalValue
 	Commit(key int, value int, time int) error
-	GetLastCommitted(key int) int
+	GetLastCommitted(key int) HistoricalValue
 }
 
 type DataManagerImpl struct {
@@ -51,7 +51,7 @@ func (d *DataManagerImpl) Dump() string {
 	sort.IntSlice(keys).Sort()
 	values := make([]int, 0)
 	for _, key := range keys {
-		values = append(values, d.GetLastCommitted(key))
+		values = append(values, d.GetLastCommitted(key).value)
 	}
 	result := make([]string, 0)
 	for i := 0; i < len(values); i++ {
@@ -60,9 +60,9 @@ func (d *DataManagerImpl) Dump() string {
 	return fmt.Sprintf("site %d - %s", d.siteId, strings.Join(result, ", "))
 }
 
-func (d *DataManagerImpl) GetLastCommitted(key int) int {
+func (d *DataManagerImpl) GetLastCommitted(key int) HistoricalValue {
 	committedArray := d.commitedValues[key]
-	return committedArray[len(committedArray)-1].value
+	return committedArray[len(committedArray)-1]
 }
 
 func (d *DataManagerImpl) Read(key int, time int) HistoricalValue {
