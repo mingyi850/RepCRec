@@ -1,0 +1,10 @@
+/* 
+Test that first commit wins
+*/
+
+begin(T1)
+begin(T2)
+W(T1, x3, 111)
+W(T2, x3, 222)
+end(T2)
+end(T1)

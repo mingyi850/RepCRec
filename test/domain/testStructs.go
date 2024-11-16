@@ -48,9 +48,49 @@ func (s *SiteCoordinatorTestImpl) CommitSiteWrite(site int, key int, value int, 
 	return s.siteCoordinator.CommitSiteWrite(site, key, value, time)
 }
 
+type TransactionManagerTestImpl struct {
+	transactionManager *domain.TransactionManagerImpl
+}
+
+func CreateTransactionManagerTestImpl(siteCoordinator domain.SiteCoordinator) *TransactionManagerTestImpl {
+	return &TransactionManagerTestImpl{
+		transactionManager: domain.CreateTransactionManager(siteCoordinator),
+	}
+}
+
+func (t *TransactionManagerTestImpl) Begin(transaction int, time int) error {
+	return t.transactionManager.Begin(transaction, time)
+}
+
+func (t *TransactionManagerTestImpl) End(transaction int, time int) (domain.CommitResult, error) {
+	return t.transactionManager.End(transaction, time)
+}
+
+func (t *TransactionManagerTestImpl) Write(transaction int, key int, value int, time int) (domain.WriteResult, error) {
+	return t.transactionManager.Write(transaction, key, value, time)
+}
+
+func (t *TransactionManagerTestImpl) Read(transaction int, key int, time int) (domain.ReadResult, error) {
+	return t.transactionManager.Read(transaction, key, time)
+}
+
+func (t *TransactionManagerTestImpl) Recover(site int, time int) error {
+	return t.transactionManager.Recover(site, time)
+}
+
 /****************************************************
  * Helper functions for testing
  ****************************************************/
+
+/*
+*************
+SiteCoordinator
+*************
+*/
 func (s *SiteCoordinatorTestImpl) GetLatestValue(site int, key int) domain.HistoricalValue {
 	return s.siteCoordinator.Sites[site].GetLastCommitted(key)
 }
+
+/*******************
+ TransactionManager
+*******************/

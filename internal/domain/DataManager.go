@@ -17,6 +17,10 @@ func (h HistoricalValue) GetValue() int {
 	return h.value
 }
 
+func (h HistoricalValue) GetTime() int {
+	return h.time
+}
+
 type PendingWrite struct {
 	key   int
 	value int

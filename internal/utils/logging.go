@@ -16,6 +16,10 @@ func LogAbort(transaction int, reason string) {
 	}
 }
 
+func LogAborted(transaction int) {
+	fmt.Printf("T%d already aborted\n", transaction)
+}
+
 func LogWait(transaction int) {
 	fmt.Printf("T%d waits\n", transaction)
 }

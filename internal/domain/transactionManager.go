@@ -28,6 +28,7 @@ const (
 	Wait    OperationResultType = "wait"
 	Success OperationResultType = "success"
 	Waiting OperationResultType = "waiting"
+	Aborted OperationResultType = "aborted"
 )
 
 type CommitResultReason string
@@ -54,6 +55,15 @@ type ReadResult struct {
 	ResultType OperationResultType
 }
 
+type TransactionState string
+
+const (
+	TxActive    TransactionState = "active"
+	TxWaiting   TransactionState = "waiting"
+	TxAborted   TransactionState = "aborted"
+	TxCommitted TransactionState = "committed"
+)
+
 type Transaction struct {
 	id                  int
 	startTime           int
@@ -61,6 +71,7 @@ type Transaction struct {
 	pendingOperations   []Operation
 	completedOperations []Operation
 	waitingSites        map[int]bool
+	state               TransactionState
 }
 
 type TransactionManager interface {
@@ -69,6 +80,7 @@ type TransactionManager interface {
 	Write(tx int, key int, value int, time int) (WriteResult, error)
 	Read(tx int, key int, time int) (ReadResult, error) // Returns read value if available
 	Recover(site int, time int) error
+	GetTransaction(tx int) (*Transaction, bool, error)
 }
 
 type TransactionManagerImpl struct {
@@ -78,7 +90,7 @@ type TransactionManagerImpl struct {
 	TransactionGraph    map[int][]int
 }
 
-func CreateTransactionManager(SiteCoordinator SiteCoordinator) TransactionManager {
+func CreateTransactionManager(SiteCoordinator SiteCoordinator) *TransactionManagerImpl {
 	return &TransactionManagerImpl{
 		SiteCoordinator:     SiteCoordinator,
 		TransactionMap:      make(map[int]*Transaction),
@@ -87,6 +99,11 @@ func CreateTransactionManager(SiteCoordinator SiteCoordinator) TransactionManage
 	}
 }
 
+/*
+************
+Transaction Manager Methods
+************
+*/
 func (t *TransactionManagerImpl) Begin(tx int, time int) error {
 	t.TransactionMap[tx] = &Transaction{
 		id:                tx,
@@ -94,6 +111,7 @@ func (t *TransactionManagerImpl) Begin(tx int, time int) error {
 		siteWrites:        make(map[int]Operation),
 		pendingOperations: make([]Operation, 0),
 		waitingSites:      make(map[int]bool),
+		state:             TxActive,
 	}
 	t.TransactionGraph[tx] = []int{}
 	return nil
@@ -106,7 +124,7 @@ If all pass:
  1. Commit all writes
 */
 func (t *TransactionManagerImpl) End(tx int, time int) (CommitResult, error) {
-	transaction, waiting, err := t.getTransaction(tx)
+	transaction, waiting, err := t.GetTransaction(tx)
 	if err != nil {
 		return CommitResult{Wait, ""}, err
 	}
@@ -114,12 +132,17 @@ func (t *TransactionManagerImpl) End(tx int, time int) (CommitResult, error) {
 		transaction.appendWaitingOperation(Operation{End, 0, 0, time})
 		return CommitResult{Waiting, ""}, nil
 	}
+	if transaction.state != TxActive {
+		return CommitResult{Aborted, "Transaction is not active"}, nil
+	}
 	for site, operation := range transaction.siteWrites {
 		result := t.SiteCoordinator.VerifySiteWrite(site, operation.key, operation.time, time)
 		switch result {
 		case SiteDown:
+			t.abortTransaction(tx)
 			return CommitResult{Abort, fmt.Sprintf("Site %d was down between write to x%d and commit", site, operation.key)}, nil
 		case SiteStale:
+			t.abortTransaction(tx)
 			return CommitResult{Abort, fmt.Sprintf("Write to x%d was stale at site %d", operation.key, site)}, nil
 		case SiteOk:
 			continue
@@ -135,13 +158,16 @@ func (t *TransactionManagerImpl) End(tx int, time int) (CommitResult, error) {
 }
 
 func (t *TransactionManagerImpl) Write(tx int, key int, value int, time int) (WriteResult, error) {
-	transaction, waiting, err := t.getTransaction(tx)
+	transaction, waiting, err := t.GetTransaction(tx)
 	if err != nil {
 		return WriteResult{Abort, []int{}}, err
 	}
 	if waiting {
 		transaction.appendWaitingOperation(Operation{Write, key, value, time})
 		return WriteResult{Waiting, []int{}}, nil
+	}
+	if transaction.state == TxAborted {
+		return WriteResult{Aborted, []int{}}, nil
 	}
 	writeSites := t.SiteCoordinator.GetActiveSitesForKey(key)
 	if len(writeSites) == 0 {
@@ -155,7 +181,7 @@ func (t *TransactionManagerImpl) Write(tx int, key int, value int, time int) (Wr
 }
 
 func (t *TransactionManagerImpl) Read(tx int, key int, time int) (ReadResult, error) {
-	transaction, waiting, err := t.getTransaction(tx)
+	transaction, waiting, err := t.GetTransaction(tx)
 	if err != nil {
 		return ReadResult{-1, Abort}, err
 	}
@@ -163,13 +189,18 @@ func (t *TransactionManagerImpl) Read(tx int, key int, time int) (ReadResult, er
 		transaction.appendWaitingOperation(Operation{Read, key, 0, time})
 		return ReadResult{-1, Waiting}, nil
 	}
-	siteList := t.SiteCoordinator.GetValidSitesForRead(key, transaction.startTime)
+	if transaction.state == TxAborted {
+		return ReadResult{-1, Aborted}, nil
+	}
+	transactionStart := transaction.startTime
+	siteList := t.SiteCoordinator.GetValidSitesForRead(key, transactionStart)
 	if len(siteList) == 0 {
-		t.removeTransaction(tx)
+		t.abortTransaction(tx)
 		return ReadResult{-1, Abort}, nil
 	}
 	for _, site := range siteList {
-		value, err := t.SiteCoordinator.ReadActiveSite(site, key, time)
+		fmt.Println("Found valid site for read", site)
+		value, err := t.SiteCoordinator.ReadActiveSite(site, key, transactionStart)
 		if err == nil {
 			transaction.appendCompletedOperation(Operation{Read, key, value.value, time})
 			return ReadResult{value.value, Success}, nil
@@ -183,7 +214,7 @@ func (t *TransactionManagerImpl) Read(tx int, key int, time int) (ReadResult, er
 
 func (t *TransactionManagerImpl) Recover(site int, time int) error {
 	for tx := range t.WaitingTransactions {
-		transaction, waiting, err := t.getTransaction(tx)
+		transaction, waiting, err := t.GetTransaction(tx)
 		if err != nil {
 			return err
 		}
@@ -205,25 +236,7 @@ func (t *TransactionManagerImpl) Recover(site int, time int) error {
 	return nil
 }
 
-func (t *TransactionManagerImpl) commitTransaction(tx int, currentTime int) error {
-	transaction, waiting, err := t.getTransaction(tx)
-	if err != nil {
-		return err
-	}
-	if waiting {
-		return fmt.Errorf("Transaction %d is waiting", tx)
-	}
-	for site, operation := range transaction.siteWrites {
-		err := t.SiteCoordinator.CommitSiteWrite(site, operation.key, operation.value, currentTime)
-		if err != nil {
-			return err
-		}
-	}
-	t.removeTransaction(tx)
-	return nil
-}
-
-func (t *TransactionManagerImpl) getTransaction(tx int) (*Transaction, bool, error) {
+func (t *TransactionManagerImpl) GetTransaction(tx int) (*Transaction, bool, error) {
 	transaction, exists := t.TransactionMap[tx]
 	if !exists {
 		return &Transaction{}, false, fmt.Errorf("Transaction %d does not exist", tx)
@@ -232,30 +245,73 @@ func (t *TransactionManagerImpl) getTransaction(tx int) (*Transaction, bool, err
 	return transaction, waiting, nil
 }
 
+func (t *TransactionManagerImpl) commitTransaction(tx int, currentTime int) error {
+	transaction, waiting, err := t.GetTransaction(tx)
+	if err != nil {
+		return err
+	}
+	if waiting {
+		return fmt.Errorf("Transaction %d is waiting", tx)
+	}
+	if transaction.state != TxActive {
+		return fmt.Errorf("Transaction %d is not active", tx)
+	}
+	for site, operation := range transaction.siteWrites {
+		err := t.SiteCoordinator.CommitSiteWrite(site, operation.key, operation.value, currentTime)
+		if err != nil {
+			return err
+		}
+	}
+	transaction.state = TxCommitted
+	t.removeTransaction(tx)
+	return nil
+}
+
+func (t *TransactionManagerImpl) abortTransaction(tx int) error {
+	transaction, _, err := t.GetTransaction(tx)
+	if err != nil {
+		return err
+	}
+	if transaction.state != TxActive {
+		return fmt.Errorf("Transaction %d is not active", tx)
+	}
+	transaction.state = TxAborted
+	t.removeTransaction(tx)
+	return nil
+}
+
 func (t *TransactionManagerImpl) waitTransaction(tx int, sites []int) error {
-	transaction, waiting, err := t.getTransaction(tx)
+	transaction, waiting, err := t.GetTransaction(tx)
 	if err != nil {
 		return err
 	}
 	if waiting {
 		return nil
 	}
+	if transaction.state != TxActive {
+		return fmt.Errorf("Transaction %d is not active", tx)
+	}
 	for _, site := range sites {
 		transaction.waitingSites[site] = true
+		transaction.state = TxWaiting
 	}
 	t.WaitingTransactions[tx] = true
 	return nil
 }
 
 func (t *TransactionManagerImpl) unwaitTransaction(tx int) error {
-	transaction, waiting, err := t.getTransaction(tx)
+	transaction, waiting, err := t.GetTransaction(tx)
 	if err != nil {
 		return err
 	}
 	if !waiting {
 		return fmt.Errorf("Transaction %d is not waiting", tx)
 	}
+	if transaction.state != TxWaiting {
+		return fmt.Errorf("Transaction %d is not waiting", tx)
+	}
 	transaction.waitingSites = make(map[int]bool)
+	transaction.state = TxActive
 	delete(t.WaitingTransactions, tx)
 	return nil
 }
@@ -291,9 +347,16 @@ func (t *TransactionManagerImpl) runPendingOperations(tx *Transaction, recoverTi
 }
 
 func (t *TransactionManagerImpl) removeTransaction(tx int) {
-	delete(t.TransactionMap, tx)
 	delete(t.WaitingTransactions, tx)
 	delete(t.TransactionGraph, tx)
+}
+
+/**********
+Transaction methods
+**********/
+
+func (tx *Transaction) GetState() TransactionState {
+	return tx.state
 }
 
 func (tx *Transaction) appendWaitingOperation(operation Operation) error {
@@ -325,6 +388,8 @@ func HandleReadResult(tx int, key int, result ReadResult) {
 		utils.LogWait(tx)
 	case Waiting:
 		utils.LogWaiting(tx)
+	case Aborted:
+		utils.LogAborted(tx)
 	}
 }
 
@@ -338,6 +403,8 @@ func HandleWriteResult(tx int, key int, result WriteResult) {
 		utils.LogWait(tx)
 	case Waiting:
 		utils.LogWaiting(tx)
+	case Aborted:
+		utils.LogAborted(tx)
 	}
 }
 
@@ -351,6 +418,8 @@ func HandleCommitResult(tx int, result CommitResult) {
 		utils.LogWait(tx)
 	case Waiting:
 		utils.LogWaiting(tx)
+	case Aborted:
+		utils.LogAborted(tx)
 	}
 }
 

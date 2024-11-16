@@ -1,0 +1,19 @@
+/* 
+Test that Reads read from latest committed value at time of Transaction start
+*/
+
+begin(T1)
+W(T1, x4, 111)
+end(T1)
+begin(T2)
+W(T2, x4, 222)
+begin(T3) // Read(T3, x4) Should return 111
+end(T2)
+begin(T4) // Read(T4, x4) Should return 222
+
+/* Test (in go file)
+Read(T3, x4) -> Should return 111
+Read(T4, x4) -> Should return 222
+*/
+
+

@@ -1,0 +1,24 @@
+/* 
+Test that Reads on replicated sites should abort if no site can service the request.
+*/
+
+begin(T1)
+W(T1, x4, 111)
+end(T1)
+fail(1)
+fail(2)
+fail(3)
+fail(4)
+fail(5)
+fail(6)
+fail(7)
+fail(8)
+fail(9)
+begin(T2) // T2 Starts before site 10 fails, should be able to wait until site 10 recovers for read
+fail(10)
+begin(T3) // T3 Starts after all sites containing x4 has failed. Should abort on read
+R(T2, x4) // Should wait
+R(T3, x4)  // Should abort
+end(T2)
+
+
