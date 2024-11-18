@@ -1,0 +1,22 @@
+/* 
+Test that waiting transactions should re-wait when continued but another blocking site is encountered
+*/
+
+begin(T1)
+W(T1, x3, 111)
+W(T1, x5, 222)
+end(T1)
+begin(T2) // T2 Starts before site 4 fails
+fail(4)
+fail(6)
+W(T2, x3, 333) // Should wait for site 4
+W(T2, x5, 444) // Should wait -> Should wait for site 6
+end(T2)
+
+
+/* Test (in go file)
+recover(4) -> T2 should recover, start waiting for site 6
+recover(6) -> T2 should write x5 to site 6, commit.
+*/
+
+

@@ -20,3 +20,9 @@ R(T2, x4) // Should wait
 end(T2)
 
 
+/* Test (in go file)
+Recover(9) -> Nothing should happen
+Recover(10) -> T2 completes
+*/
+
+

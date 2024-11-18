@@ -171,6 +171,12 @@ func (t *TransactionManagerImpl) Write(tx int, key int, value int, time int) (Wr
 	}
 	writeSites := t.SiteCoordinator.GetActiveSitesForKey(key)
 	if len(writeSites) == 0 {
+		possibleWriteSites := t.SiteCoordinator.GetSitesForKey(key)
+		t.waitTransaction(tx, possibleWriteSites)
+		// Check if this was already pending operation
+		if len(transaction.pendingOperations) == 0 {
+			transaction.appendWaitingOperation(Operation{Write, key, value, time})
+		}
 		return WriteResult{Wait, writeSites}, nil
 	}
 	for _, site := range writeSites {
@@ -199,7 +205,6 @@ func (t *TransactionManagerImpl) Read(tx int, key int, time int) (ReadResult, er
 		return ReadResult{-1, Abort}, nil
 	}
 	for _, site := range siteList {
-		fmt.Println("Found valid site for read", site)
 		value, err := t.SiteCoordinator.ReadActiveSite(site, key, transactionStart)
 		if err == nil {
 			transaction.appendCompletedOperation(Operation{Read, key, value.value, time})
@@ -208,7 +213,10 @@ func (t *TransactionManagerImpl) Read(tx int, key int, time int) (ReadResult, er
 	}
 	// Wait transaction logic
 	err = t.waitTransaction(tx, siteList)
-	transaction.appendWaitingOperation(Operation{Read, key, 0, time})
+	// Check if this was already pending operation
+	if len(transaction.pendingOperations) == 0 {
+		transaction.appendWaitingOperation(Operation{Read, key, 0, time})
+	}
 	return ReadResult{-1, Wait}, err
 }
 
@@ -293,8 +301,8 @@ func (t *TransactionManagerImpl) waitTransaction(tx int, sites []int) error {
 	}
 	for _, site := range sites {
 		transaction.waitingSites[site] = true
-		transaction.state = TxWaiting
 	}
+	transaction.state = TxWaiting
 	t.WaitingTransactions[tx] = true
 	return nil
 }
@@ -325,6 +333,10 @@ func (t *TransactionManagerImpl) runPendingOperations(tx *Transaction, recoverTi
 				return err
 			}
 			HandleWriteResult(tx.id, operation.key, result)
+			if result.ResultType != Success {
+				tx.truncatePendingOperations(index) //Wait or Abort
+				return nil
+			}
 		case Read:
 			value, err := t.Read(tx.id, operation.key, recoverTime)
 			if err != nil {
@@ -357,6 +369,10 @@ Transaction methods
 
 func (tx *Transaction) GetState() TransactionState {
 	return tx.state
+}
+
+func (tx *Transaction) GetSiteWrites() map[int]Operation {
+	return tx.siteWrites
 }
 
 func (tx *Transaction) appendWaitingOperation(operation Operation) error {

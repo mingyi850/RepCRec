@@ -129,7 +129,6 @@ func TestSimulation(t *testing.T) {
 		assert.Equal(t, true, waiting2)
 		assert.Equal(t, domain.TxWaiting, tx2.GetState())
 
-		// Also, Tx2 should recover afterwards when valid site is recovered
 		siteCoordinator.Recover(8, 10)    // Invalid site - Tx2 should be waiting on site 10
 		transactionManager.Recover(8, 10) // Invalid site - Tx2 should be waiting on site 10
 		tx2, waiting2, _ = transactionManager.GetTransaction(2)
@@ -142,6 +141,48 @@ func TestSimulation(t *testing.T) {
 		assert.Equal(t, false, waiting2)
 		assert.Equal(t, domain.TxCommitted, tx2.GetState())
 
+	})
+
+	t.Run("Transactions should re-block when a blocking site is encountered during recovery", func(t *testing.T) {
+		siteCoordinator, transactionManager, err := runTest("resources/test9.txt")
+		if err != nil {
+			fmt.Printf("Error: %v", err)
+			t.Fatal(err)
+		}
+		tx2, waiting2, _ := transactionManager.GetTransaction(2)
+		assert.Equal(t, true, waiting2)
+		assert.Equal(t, domain.TxWaiting, tx2.GetState())
+
+		siteCoordinator.Recover(4, 12)
+		transactionManager.Recover(4, 12)
+		tx2, waiting2, _ = transactionManager.GetTransaction(2)
+		assert.Equal(t, true, waiting2)
+		assert.Equal(t, domain.TxWaiting, tx2.GetState())
+		result, exists := tx2.GetSiteWrites()[4] // Check that write of variable x3 to site 4 happened locally
+		fmt.Println("Site Writes", result)
+		assert.Equal(t, true, exists)
+
+		siteCoordinator.Recover(6, 13) // Recover site 6
+		transactionManager.Recover(6, 13)
+		tx2, waiting2, _ = transactionManager.GetTransaction(2)
+		assert.Equal(t, false, waiting2)
+		assert.Equal(t, domain.TxCommitted, tx2.GetState())
+		transactionManager.Begin(3, 14)
+		read, err := transactionManager.Read(3, 5, 15)
+		assert.Nil(t, err)
+		assert.Equal(t, 444, read.Value) // Should read last value written by Tx2
+
+	})
+
+	t.Run("Failure after write aborts transaction", func(t *testing.T) {
+		siteCoordinator, transactionManager, err := runTest("resources/test10.txt")
+		if err != nil {
+			fmt.Printf("Error: %v", err)
+			t.Fatal(err)
+		}
+		tx1, _, _ := transactionManager.GetTransaction(1)
+		assert.Equal(t, domain.TxAborted, tx1.GetState())
+		assert.Equal(t, 40, siteCoordinator.GetLatestValue(1, 4).GetValue()) // Original value of 4
 	})
 
 }

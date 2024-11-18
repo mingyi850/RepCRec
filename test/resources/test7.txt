@@ -8,8 +8,8 @@ end(T1)
 begin(T2) // T2 Starts before site 4 fails
 fail(4)
 begin(T3) // T3 Starts after all sites containing x3 has failed.
-R(T2, x3) // Should wait
-R(T3, x3)  // Should wait
+R(T2, x3) // Should wait -> Unreplicated
+R(T3, x3)  // Should wait -> Unreplicated
 end(T2)
 
 
