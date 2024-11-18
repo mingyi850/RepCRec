@@ -11,9 +11,6 @@ import (
 	"github.com/mingyi850/repcrec/internal/domain"
 )
 
-//type TransasctionManager = domain.TransactionManagerImpl
-//type SiteCoordinator = domain.SiteCoordinatorImpl
-
 func Simulation(file *os.File, siteCoordinator domain.SiteCoordinator, transactionManager domain.TransactionManager) error {
 	time := 1
 	scanner := bufio.NewScanner(file)
@@ -24,15 +21,14 @@ func Simulation(file *os.File, siteCoordinator domain.SiteCoordinator, transacti
 		switch {
 		case isCommentStart(line):
 			commentFlag = true
-			time--
+			continue
 		case isCommentEnd(line):
 			commentFlag = false
-			time--
-		case isComment(line, commentFlag):
-			time--
 			continue
-		case line == "": //Skip empty lines
-			time--
+		case isComment(line, commentFlag):
+			continue
+		case line == "":
+			continue
 		case isBegin(line):
 			transaction, err := extractBegin(line)
 			if err != nil {

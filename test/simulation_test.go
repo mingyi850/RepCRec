@@ -187,4 +187,40 @@ func TestSimulation(t *testing.T) {
 		assert.Equal(t, 40, siteCoordinator.GetLatestValue(1, 4).GetValue()) // Original value of 4
 	})
 
+	t.Run("RWRW in graph cycle aborts transaction", func(t *testing.T) {
+		siteCoordinator, transactionManager, err := runTest("resources/test11.txt")
+		if err != nil {
+			fmt.Printf("Error: %v", err)
+			t.Fatal(err)
+		}
+		tx1, _, _ := transactionManager.GetTransaction(1)
+		assert.Equal(t, domain.TxAborted, tx1.GetState())
+		tx2, _, _ := transactionManager.GetTransaction(2)
+		assert.Equal(t, domain.TxCommitted, tx2.GetState())
+		tx3, _, _ := transactionManager.GetTransaction(3)
+		assert.Equal(t, domain.TxCommitted, tx3.GetState())
+
+		assert.Equal(t, 222, siteCoordinator.GetLatestValue(1, 4).GetValue()) // Tx writes to x4
+		assert.Equal(t, 333, siteCoordinator.GetLatestValue(4, 3).GetValue()) // Tx writes to x4
+		assert.Equal(t, 333, siteCoordinator.GetLatestValue(6, 5).GetValue()) // Tx writes to x4
+
+	})
+
+	t.Run("RWRW in graph cycle aborts transaction part 2", func(t *testing.T) {
+		_, transactionManager, err := runTest("resources/test12.txt")
+		if err != nil {
+			fmt.Printf("Error: %v", err)
+			t.Fatal(err)
+		}
+		tx1, _, _ := transactionManager.GetTransaction(1)
+		assert.Equal(t, domain.TxCommitted, tx1.GetState())
+		tx2, _, _ := transactionManager.GetTransaction(2)
+		assert.Equal(t, domain.TxAborted, tx2.GetState())
+		tx3, _, _ := transactionManager.GetTransaction(3)
+		assert.Equal(t, domain.TxCommitted, tx3.GetState())
+		tx4, _, _ := transactionManager.GetTransaction(4)
+		assert.Equal(t, domain.TxCommitted, tx4.GetState())
+
+	})
+
 }

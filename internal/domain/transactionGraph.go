@@ -58,7 +58,7 @@ func (t *TransactionGraph) RemoveNode(tx int) {
 
 func (t *TransactionGraph) FindRWCycles(tx int) bool {
 	visited := make(map[int]bool)
-	cycles := t.findCycle(tx, tx, visited, make([]Edge, 0))
+	cycles := t.findCycles(tx, tx, visited, make([]Edge, 0))
 	for _, cycle := range cycles {
 		if t.findConsecutiveRW(cycle) {
 			return true
@@ -67,7 +67,7 @@ func (t *TransactionGraph) FindRWCycles(tx int) bool {
 	return false
 }
 
-func (t *TransactionGraph) findCycle(current int, start int, visited map[int]bool, path []Edge) [][]Edge {
+func (t *TransactionGraph) findCycles(current int, start int, visited map[int]bool, path []Edge) [][]Edge {
 	if current == start && len(path) > 1 {
 		return append(make([][]Edge, 0), path)
 	}
@@ -79,7 +79,7 @@ func (t *TransactionGraph) findCycle(current int, start int, visited map[int]boo
 		if !visited[next] {
 			edge := Edge{current, next, edge}
 			newPath := append(path, edge)
-			foundCycles = append(foundCycles, t.findCycle(next, start, visited, newPath)...)
+			foundCycles = append(foundCycles, t.findCycles(next, start, visited, newPath)...)
 		}
 	}
 	visited[current] = false

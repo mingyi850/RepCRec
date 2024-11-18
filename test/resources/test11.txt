@@ -1,0 +1,22 @@
+/* 
+Test that transaction graph detects RW cycles and aborts when a cycle is detected
+T1  --rw(x4)->  T2  --rw(x3)->  T3  --ww(x5)-->  T1
+*/
+
+begin(T1)
+begin(T2)
+begin(T3)
+R(T1, x4)
+W(T2, x4, 222)
+R(T2, x3)
+W(T3, x3, 333)
+W(T3, x5, 333)
+W(T1, x5, 111)
+end(T1) // Should abort due to RW cycle
+end(T2) // Should commit
+end(T3) // Should commit.
+
+
+
+
+

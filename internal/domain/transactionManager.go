@@ -118,7 +118,7 @@ func (t *TransactionManagerImpl) Begin(tx int, time int) error {
 		startTime:           time,
 		siteWrites:          make(map[int]Operation),
 		pendingOperations:   make([]Operation, 0),
-		completedOperations: make(map[int][]Operation, 0),
+		completedOperations: make(map[int][]Operation, 0), // key -> operations
 		waitingSites:        make(map[int]bool),
 		state:               TxActive,
 	}
@@ -156,8 +156,6 @@ func (t *TransactionManagerImpl) End(tx int, time int) (CommitResult, error) {
 		t.abortTransaction(tx)
 		return CommitResult{Abort, fmt.Sprintf("Tx: %d, RW cycle detected", tx)}, nil
 	}
-	// Check for RW cycles in Transaction Graph
-	// Commit all values in transaction and remove
 	err = t.commitTransaction(tx, time)
 	if err != nil {
 		return CommitResult{Abort, err.Error()}, nil
