@@ -153,6 +153,7 @@ func TestSimulation(t *testing.T) {
 		assert.Equal(t, true, waiting2)
 		assert.Equal(t, domain.TxWaiting, tx2.GetState())
 
+		// After site 4 recovers, Tx2 should write site 4 and wait for site 6
 		siteCoordinator.Recover(4, 12)
 		transactionManager.Recover(4, 12)
 		tx2, waiting2, _ = transactionManager.GetTransaction(2)
@@ -162,7 +163,8 @@ func TestSimulation(t *testing.T) {
 		fmt.Println("Site Writes", result)
 		assert.Equal(t, true, exists)
 
-		siteCoordinator.Recover(6, 13) // Recover site 6
+		// After site 6 recovers, Tx2 should write to site 6 and commit
+		siteCoordinator.Recover(6, 13)
 		transactionManager.Recover(6, 13)
 		tx2, waiting2, _ = transactionManager.GetTransaction(2)
 		assert.Equal(t, false, waiting2)

@@ -87,7 +87,7 @@ type TransactionManagerImpl struct {
 	SiteCoordinator     SiteCoordinator
 	TransactionMap      map[int]*Transaction
 	WaitingTransactions map[int]bool
-	TransactionGraph    map[int][]int
+	TransactionGraph    TransactionGraph
 }
 
 func CreateTransactionManager(SiteCoordinator SiteCoordinator) *TransactionManagerImpl {
@@ -95,7 +95,7 @@ func CreateTransactionManager(SiteCoordinator SiteCoordinator) *TransactionManag
 		SiteCoordinator:     SiteCoordinator,
 		TransactionMap:      make(map[int]*Transaction),
 		WaitingTransactions: make(map[int]bool),
-		TransactionGraph:    make(map[int][]int),
+		TransactionGraph:    CreateTransactionGraph(),
 	}
 }
 
@@ -113,7 +113,7 @@ func (t *TransactionManagerImpl) Begin(tx int, time int) error {
 		waitingSites:      make(map[int]bool),
 		state:             TxActive,
 	}
-	t.TransactionGraph[tx] = []int{}
+	t.TransactionGraph.AddNode(tx)
 	return nil
 }
 
@@ -360,7 +360,7 @@ func (t *TransactionManagerImpl) runPendingOperations(tx *Transaction, recoverTi
 
 func (t *TransactionManagerImpl) removeTransaction(tx int) {
 	delete(t.WaitingTransactions, tx)
-	delete(t.TransactionGraph, tx)
+	t.TransactionGraph.RemoveNode(tx)
 }
 
 /**********
