@@ -14,6 +14,14 @@ const (
 	End   OperationType = "end"
 )
 
+type ConflictType int
+
+const (
+	WW ConflictType = 1
+	WR ConflictType = 2
+	RW ConflictType = 3
+)
+
 type Operation struct {
 	operationType OperationType
 	key           int
@@ -69,7 +77,7 @@ type Transaction struct {
 	startTime           int
 	siteWrites          map[int]Operation
 	pendingOperations   []Operation
-	completedOperations []Operation
+	completedOperations map[int][]Operation
 	waitingSites        map[int]bool
 	state               TransactionState
 }
@@ -106,23 +114,18 @@ Transaction Manager Methods
 */
 func (t *TransactionManagerImpl) Begin(tx int, time int) error {
 	t.TransactionMap[tx] = &Transaction{
-		id:                tx,
-		startTime:         time,
-		siteWrites:        make(map[int]Operation),
-		pendingOperations: make([]Operation, 0),
-		waitingSites:      make(map[int]bool),
-		state:             TxActive,
+		id:                  tx,
+		startTime:           time,
+		siteWrites:          make(map[int]Operation),
+		pendingOperations:   make([]Operation, 0),
+		completedOperations: make(map[int][]Operation, 0),
+		waitingSites:        make(map[int]bool),
+		state:               TxActive,
 	}
 	t.TransactionGraph.AddNode(tx)
 	return nil
 }
 
-/*
-Tx Graph Check: Check for cycles in Transaction Graph. If cycle is found, abort.
-
-If all pass:
- 1. Commit all writes
-*/
 func (t *TransactionManagerImpl) End(tx int, time int) (CommitResult, error) {
 	transaction, waiting, err := t.GetTransaction(tx)
 	if err != nil {
@@ -147,6 +150,11 @@ func (t *TransactionManagerImpl) End(tx int, time int) (CommitResult, error) {
 		case SiteOk:
 			continue
 		}
+	}
+	rwCycles := t.TransactionGraph.FindRWCycles(tx)
+	if rwCycles {
+		t.abortTransaction(tx)
+		return CommitResult{Abort, fmt.Sprintf("Tx: %d, RW cycle detected", tx)}, nil
 	}
 	// Check for RW cycles in Transaction Graph
 	// Commit all values in transaction and remove
@@ -182,7 +190,7 @@ func (t *TransactionManagerImpl) Write(tx int, key int, value int, time int) (Wr
 	for _, site := range writeSites {
 		transaction.addSiteWrite(site, key, value, time)
 	}
-	transaction.appendCompletedOperation(Operation{Write, key, value, time})
+	t.completeOperation(*transaction, Operation{Write, key, value, time})
 	return WriteResult{Success, writeSites}, nil
 }
 
@@ -207,7 +215,7 @@ func (t *TransactionManagerImpl) Read(tx int, key int, time int) (ReadResult, er
 	for _, site := range siteList {
 		value, err := t.SiteCoordinator.ReadActiveSite(site, key, transactionStart)
 		if err == nil {
-			transaction.appendCompletedOperation(Operation{Read, key, value.value, time})
+			t.completeOperation(*transaction, Operation{Read, key, value.value, time})
 			return ReadResult{value.value, Success}, nil
 		}
 	}
@@ -363,6 +371,44 @@ func (t *TransactionManagerImpl) removeTransaction(tx int) {
 	t.TransactionGraph.RemoveNode(tx)
 }
 
+func (t *TransactionManagerImpl) completeOperation(transaction Transaction, operation Operation) error {
+	transaction.appendCompletedOperation(operation)
+	conflicts := t.findConflicts(transaction.id, operation)
+	for tx, conflictMap := range conflicts {
+		for conflictType := range conflictMap {
+			t.TransactionGraph.AddEdge(tx, transaction.id, conflictType)
+		}
+	}
+	return nil
+}
+
+func (t *TransactionManagerImpl) findConflicts(original int, operation Operation) map[int]map[ConflictType]bool {
+	result := make(map[int]map[ConflictType]bool)
+	for tx, transaction := range t.TransactionMap {
+		if tx != original {
+			result[tx] = make(map[ConflictType]bool)
+			pastOperations := transaction.completedOperations[operation.key]
+			for _, pastOp := range pastOperations {
+				switch operation.operationType {
+				case Write:
+					switch pastOp.operationType {
+					case Write:
+						result[tx][WW] = true
+					case Read:
+						result[tx][RW] = true
+					}
+				case Read:
+					switch pastOp.operationType {
+					case Write:
+						result[tx][WR] = true
+					}
+				}
+			}
+		}
+	}
+	return result
+}
+
 /**********
 Transaction methods
 **********/
@@ -381,7 +427,7 @@ func (tx *Transaction) appendWaitingOperation(operation Operation) error {
 }
 
 func (tx *Transaction) appendCompletedOperation(operation Operation) error {
-	tx.completedOperations = append(tx.completedOperations, operation)
+	tx.completedOperations[operation.key] = append(tx.completedOperations[operation.key], operation)
 	return nil
 }
 

@@ -2,69 +2,51 @@ package domain
 
 import "fmt"
 
-type EdgeType int
-
-const (
-	WEdge  EdgeType = 1
-	REdge  EdgeType = 2
-	RWEdge EdgeType = 3
-)
-
 type Edge struct {
 	from     int
 	to       int
-	edgeType EdgeType
+	edgeType ConflictType
 }
 
 type TransactionGraph struct {
-	graph map[int]map[int]EdgeType
+	graph map[int]map[int]ConflictType
 }
 
 func CreateTransactionGraph() TransactionGraph {
 	return TransactionGraph{
-		graph: make(map[int]map[int]EdgeType),
+		graph: make(map[int]map[int]ConflictType),
 	}
 }
 
-func (t *TransactionGraph) GetGraph() map[int]map[int]EdgeType {
+func (t *TransactionGraph) GetGraph() map[int]map[int]ConflictType {
 	return t.graph
 }
 
 func (t *TransactionGraph) AddNode(tx int) {
 	if _, exists := t.graph[tx]; !exists {
-		t.graph[tx] = make(map[int]EdgeType)
+		t.graph[tx] = make(map[int]ConflictType)
 	}
 }
 
-func (t *TransactionGraph) GetEdges(tx int) map[int]EdgeType {
+func (t *TransactionGraph) GetEdges(tx int) map[int]ConflictType {
 	return t.graph[tx]
 }
 
-func (t *TransactionGraph) AddEdge(from int, to int, edgeType EdgeType) error {
+func (t *TransactionGraph) AddEdge(from int, to int, edgeType ConflictType) error {
 	if _, exists := t.graph[from]; !exists {
 		return fmt.Errorf("Transaction %d does not exist in Graph", from)
 	}
 	if _, exists := t.graph[to]; !exists {
 		return fmt.Errorf("Transaction %d does not exist in Graph", from)
 	}
-	if prevEdge, exists := t.graph[from][to]; !exists {
+	if _, exists := t.graph[from][to]; !exists {
 		t.graph[from][to] = edgeType
 		return nil
-	} else {
-		switch prevEdge {
-		case WEdge:
-			if edgeType == REdge {
-				t.graph[from][to] = RWEdge
-			}
-		case REdge:
-			if edgeType == WEdge {
-				t.graph[from][to] = RWEdge
-			}
-		case RWEdge:
-			// Do nothing - already RW edge
-		}
-		return nil
 	}
+	if edgeType == RW { //Promote non-RW edge to RW edge iff new edge is RW
+		t.graph[from][to] = RW
+	}
+	return nil
 }
 
 func (t *TransactionGraph) RemoveNode(tx int) {
@@ -110,7 +92,7 @@ func (t *TransactionGraph) findConsecutiveRW(cycle []Edge) bool {
 		cycle = append(cycle, cycle[0])
 	}
 	for _, edge := range cycle {
-		isRw := edge.edgeType == RWEdge
+		isRw := edge.edgeType == RW
 		if prev && isRw {
 			return true
 		}
