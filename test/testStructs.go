@@ -1,4 +1,4 @@
-package test
+package internal
 
 import "github.com/mingyi850/repcrec/internal/domain"
 

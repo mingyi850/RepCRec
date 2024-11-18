@@ -6,6 +6,11 @@ import (
 	"github.com/mingyi850/repcrec/internal/utils"
 )
 
+/*
+*********
+Consts and Enums
+*********
+*/
 type OperationType string
 
 const (
@@ -22,13 +27,6 @@ const (
 	RW ConflictType = 3
 )
 
-type Operation struct {
-	operationType OperationType
-	key           int
-	value         int
-	time          int
-}
-
 type OperationResultType string
 
 const (
@@ -39,14 +37,26 @@ const (
 	Aborted OperationResultType = "aborted"
 )
 
-type CommitResultReason string
+type TransactionState string
 
 const (
-	CommitSiteDown  CommitResultReason = "down"
-	CommitSiteStale CommitResultReason = "stale"
-	RWCycle         CommitResultReason = "rw_cycle"
-	CommitOK        CommitResultReason = "ok"
+	TxActive    TransactionState = "active"
+	TxWaiting   TransactionState = "waiting"
+	TxAborted   TransactionState = "aborted"
+	TxCommitted TransactionState = "committed"
 )
+
+/*
+********
+Custom Structs
+*********
+*/
+type Operation struct {
+	operationType OperationType
+	key           int
+	value         int
+	time          int
+}
 
 type CommitResult struct {
 	ResultType OperationResultType
@@ -62,15 +72,6 @@ type ReadResult struct {
 	Value      int
 	ResultType OperationResultType
 }
-
-type TransactionState string
-
-const (
-	TxActive    TransactionState = "active"
-	TxWaiting   TransactionState = "waiting"
-	TxAborted   TransactionState = "aborted"
-	TxCommitted TransactionState = "committed"
-)
 
 type Transaction struct {
 	id                  int
@@ -482,38 +483,3 @@ func HandleCommitResult(tx int, result CommitResult) {
 		utils.LogAborted(tx)
 	}
 }
-
-/*
-
-Rough logic for read (inTxManager) ->
-1. GetValidSitesForKey -> Give us a list of all valid sites we could read from.
--> If none, Abort
-1. Find any active site from the list. If found, read from there.
-2. If none, wait transaction
--- Done
-
-For Writes:
-1. GetActiveSiteFoeKey -> Give us a list of all active sites we can write to.
-2. If none: Wait
-3. If some -> Write to only that site.
-
-For Commit:
-1. Check all writes made by transaction.
-2. For each write (sites, key, value, time)
-	1. For each site
-		1. Make sure site has been up since the write time.
-		2. Read last committed value for the key
-		3. Make sure last committed value timestamp is less than the write.
-	If any of the above fails, abort.
-3. Check for cycles in Transaction Graph. If cycle is found, abort.
-	If all pass
-		1. Commit all writes
-
-Aborts:
-1. Remove transaction from TransactionMap
-2. Remove transaction from TransactionGraph - set all outgoing edges to nil
-
-Recover:
-1. For each waiting site, check if we can continue.
-2. If yes, run all operations on site in pendingOperations.
-*/

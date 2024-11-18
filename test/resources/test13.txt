@@ -1,0 +1,27 @@
+/* 
+Test that transaction graph detects RW cycles in complex cases and aborts when a cycle is detected
+T1  --wr(x4)->  T2  --rw(x15)->  T3  --wr(x15)-->  T4 -- rw(x6) --> T2
+                                                 T4 -- rw(x7) --> T1 
+
+*/
+
+begin(T1)
+begin(T2)
+W(T1, x4, 111)
+R(T2, x4)
+R(T2, x15)
+begin(T3)
+W(T3, x15, 333)
+begin(T4)
+R(T4, x15)
+R(T4, x6)
+R(T4, x7)
+W(T2, x6, 222)
+W(T1, x7, 222)
+end(T1) -> T1 commits
+end(T3) -> T3 aborts due to cycle
+end(T2) -> T2 commits
+end(T4) -> T4 commits
+
+
+

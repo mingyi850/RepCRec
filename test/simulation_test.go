@@ -7,18 +7,17 @@ import (
 
 	"github.com/mingyi850/repcrec/internal"
 	"github.com/mingyi850/repcrec/internal/domain"
-	test "github.com/mingyi850/repcrec/test/domain"
 	"github.com/stretchr/testify/assert"
 )
 
-func runTest(filePath string) (*test.SiteCoordinatorTestImpl, domain.TransactionManager, error) {
+func runTest(filePath string) (*SiteCoordinatorTestImpl, domain.TransactionManager, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
 		fmt.Println(err)
 		return nil, nil, err
 	}
 	defer file.Close()
-	siteCoordinator := test.CreateSiteCoordinatorTestImpl(10)
+	siteCoordinator := CreateSiteCoordinatorTestImpl(10)
 	transactionManager := domain.CreateTransactionManager(siteCoordinator)
 	err = internal.Simulation(file, siteCoordinator, transactionManager)
 	return siteCoordinator, transactionManager, err
@@ -223,4 +222,34 @@ func TestSimulation(t *testing.T) {
 
 	})
 
+	t.Run("RWRW in graph cycle - abort avoided by strategic commits", func(t *testing.T) {
+		_, transactionManager, err := runTest("resources/test14.txt")
+		if err != nil {
+			fmt.Printf("Error: %v", err)
+			t.Fatal(err)
+		}
+		tx1, _, _ := transactionManager.GetTransaction(1)
+		assert.Equal(t, domain.TxCommitted, tx1.GetState())
+		tx2, _, _ := transactionManager.GetTransaction(2)
+		assert.Equal(t, domain.TxCommitted, tx2.GetState())
+		tx3, _, _ := transactionManager.GetTransaction(3)
+		assert.Equal(t, domain.TxCommitted, tx3.GetState())
+		tx4, _, _ := transactionManager.GetTransaction(4)
+		assert.Equal(t, domain.TxCommitted, tx4.GetState())
+
+	})
+
+	t.Run("Transaction should abort on read if no valid sites (even if active)", func(t *testing.T) {
+		_, transactionManager, err := runTest("resources/test15.txt")
+		if err != nil {
+			fmt.Printf("Error: %v", err)
+			t.Fatal(err)
+		}
+		tx1, _, _ := transactionManager.GetTransaction(1)
+		assert.Equal(t, domain.TxCommitted, tx1.GetState())
+		tx2, _, _ := transactionManager.GetTransaction(2)
+		assert.Equal(t, domain.TxCommitted, tx2.GetState())
+		tx3, _, _ := transactionManager.GetTransaction(3)
+		assert.Equal(t, domain.TxAborted, tx3.GetState())
+	})
 }
