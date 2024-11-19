@@ -1,3 +1,9 @@
+/**************************
+File: simulation.go
+Author: Mingyi Lim
+Description: This file contains the implementation of the Simulation function. The Simulation function is responsible for parsing the input file and simulating the transactions.
+***************************/
+
 package internal
 
 import (
@@ -11,6 +17,7 @@ import (
 	"github.com/mingyi850/repcrec/internal/domain"
 )
 
+/* Simulation reads the input file and interacts with TransactionManager and SiteCoordinator */
 func Simulation(file *os.File, siteCoordinator domain.SiteCoordinator, transactionManager domain.TransactionManager) error {
 	time := 1
 	scanner := bufio.NewScanner(file)
@@ -18,15 +25,15 @@ func Simulation(file *os.File, siteCoordinator domain.SiteCoordinator, transacti
 	for scanner.Scan() {
 		line := scanner.Text()
 		switch {
-		case isCommentStart(line):
+		case isCommentStart(line): // Allows multiline comments
 			commentFlag = true
 			continue
-		case isCommentEnd(line):
+		case isCommentEnd(line): // Allows multiline comments
 			commentFlag = false
 			continue
-		case isComment(line, commentFlag):
+		case isComment(line, commentFlag): // Allows single line comments
 			continue
-		case line == "":
+		case line == "": // Skip empty lines
 			continue
 		case isBegin(line):
 			transaction, err := extractBegin(line)
@@ -96,6 +103,11 @@ func Simulation(file *os.File, siteCoordinator domain.SiteCoordinator, transacti
 	return nil
 }
 
+/*
+*************************
+Parser functions to check the type of line
+***************************
+*/
 func isCommentStart(line string) bool {
 	return strings.HasPrefix(line, "/*")
 }
@@ -137,6 +149,12 @@ func isDump(line string) bool {
 func isExit(line string) bool {
 	return strings.HasPrefix(line, "exit")
 }
+
+/*
+*************************
+Parser functions to extract data from the line
+***************************
+*/
 
 // Example: R(T1, x4) -> 1, 4
 func extractRead(line string) (int, int, error) {

@@ -1,3 +1,9 @@
+/**************************
+File: simulation.go
+Author: Mingyi Lim
+Description: This file contains the entrypoint to the program. It reads the input file and starts the simulation.
+***************************/
+
 package main
 
 import (
@@ -8,6 +14,14 @@ import (
 	"github.com/mingyi850/repcrec/internal/domain"
 )
 
+/*
+************
+Runs Main function
+
+If filename is provided, reads instructions from file
+Else, reads instructions from stdin
+************
+*/
 func main() {
 	file := os.Stdin
 	var err error
@@ -24,7 +38,6 @@ func main() {
 	if file == os.Stdin {
 		fmt.Println("Please enter input and press Ctrl-D or enter exit to exit")
 	}
-	// Read file line by line
 	siteCoordinator := domain.CreateSiteCoordinator(10)
 	transactionManager := domain.CreateTransactionManager(siteCoordinator)
 	err = internal.Simulation(file, siteCoordinator, transactionManager)
