@@ -1,3 +1,9 @@
+/**************************
+File: siteCoordinator.go
+Author: Mingyi Lim
+Description: This file contains the implementation of the SiteCoordinator interface. The SiteCoordinator is responsible for managing the data across all sites. It provides interfaces to access and modify the data, It also provides the interface to manage site failures and recoveries.
+***************************/
+
 package domain
 
 import (
@@ -7,6 +13,11 @@ import (
 	"github.com/mingyi850/repcrec/internal/utils"
 )
 
+/*
+***********
+Custom Structs
+***********
+*/
 type SiteCommitResult string
 
 const (
@@ -20,6 +31,10 @@ type Range struct {
 	end   int
 }
 
+/*
+SiteCoordinator is responsible for managing the data across all sites. It provides interfaces to access and modify the data,
+It also provides the interface to manage site failures and recoveries.
+*/
 type SiteCoordinator interface {
 	Fail(site int, time int) error
 	Recover(site int, time int) error
@@ -32,11 +47,13 @@ type SiteCoordinator interface {
 	CommitSiteWrite(site int, key int, value int, time int) error
 }
 
+/* Each site contains a DataManager and a list of time ranges that it was up for, allowing us to track when a site was up/down */
 type SiteCoordinatorImpl struct {
 	Sites      map[int]DataManager
 	SiteUptime map[int]([]Range)
 }
 
+/* Creates a new SiteCoordinator with the given number of sites */
 func CreateSiteCoordinator(numSites int) *SiteCoordinatorImpl {
 	sites := make(map[int]DataManager)
 	uptimes := make(map[int]([]Range))
@@ -51,6 +68,7 @@ func CreateSiteCoordinator(numSites int) *SiteCoordinatorImpl {
 	}
 }
 
+/* Fail a site at the given time. Closes the existing range for a site that is up. */
 func (s *SiteCoordinatorImpl) Fail(site int, time int) error {
 	if s.isActiveSite(site) {
 		uptimeArr := s.SiteUptime[site]
@@ -59,6 +77,7 @@ func (s *SiteCoordinatorImpl) Fail(site int, time int) error {
 	return nil
 }
 
+/* Recover a site at the given time. Adds a new range start for a site which is down. */
 func (s *SiteCoordinatorImpl) Recover(site int, time int) error {
 	if !s.isActiveSite(site) {
 		s.SiteUptime[site] = append(s.SiteUptime[site], Range{start: time, end: -1})
@@ -66,6 +85,7 @@ func (s *SiteCoordinatorImpl) Recover(site int, time int) error {
 	return nil
 }
 
+/* Returns a all lines representing a snapshot of all sites */
 func (s *SiteCoordinatorImpl) Dump() string {
 	results := make([]string, 10)
 	for i := 1; i <= 10; i++ {
@@ -74,6 +94,7 @@ func (s *SiteCoordinatorImpl) Dump() string {
 	return strings.Join(results, "\n")
 }
 
+/* Returns a list of active sites that contain the given key */
 func (s *SiteCoordinatorImpl) GetActiveSitesForKey(key int) []int {
 	readSites := s.GetSitesForKey(key)
 	result := make([]int, 0)
@@ -85,6 +106,7 @@ func (s *SiteCoordinatorImpl) GetActiveSitesForKey(key int) []int {
 	return result
 }
 
+/* Returns a list of valid sites that contain the given key and were alive between the previous commit and the current transaction start */
 func (s *SiteCoordinatorImpl) GetValidSitesForRead(key int, txStart int) []int {
 	readSites := s.GetSitesForKey(key)
 	result := make([]int, 0)
@@ -101,6 +123,7 @@ func (s *SiteCoordinatorImpl) GetValidSitesForRead(key int, txStart int) []int {
 	return result
 }
 
+/* Returns a list of sites that contain the given key */
 func (s *SiteCoordinatorImpl) GetSitesForKey(key int) []int {
 	if key%2 == 0 {
 		return utils.GetRange(1, 10, 1)
@@ -109,6 +132,7 @@ func (s *SiteCoordinatorImpl) GetSitesForKey(key int) []int {
 	}
 }
 
+/* Returns the last committed value of a key at the given time */
 func (s *SiteCoordinatorImpl) ReadActiveSite(site int, key int, time int) (HistoricalValue, error) {
 	if !s.isActiveSite(site) {
 		return HistoricalValue{}, fmt.Errorf("site %d is not active", site)
@@ -116,6 +140,7 @@ func (s *SiteCoordinatorImpl) ReadActiveSite(site int, key int, time int) (Histo
 	return s.Sites[site].Read(key, time), nil
 }
 
+/* Verifies that a site did not go down since and no commit has occured since a given write */
 func (s *SiteCoordinatorImpl) VerifySiteWrite(site int, key int, writeTime int, currentTime int) SiteCommitResult {
 	if !s.wasAliveBetween(site, writeTime, currentTime) {
 		return SiteDown
@@ -128,12 +153,18 @@ func (s *SiteCoordinatorImpl) VerifySiteWrite(site int, key int, writeTime int, 
 	}
 }
 
+/* Commits a write to a site. Modifies data at the given site */
 func (s *SiteCoordinatorImpl) CommitSiteWrite(site int, key int, value int, currentTime int) error {
 	dataManager := s.Sites[site]
 	dataManager.Commit(key, value, currentTime)
 	return nil
 }
 
+/*
+******
+Private Methods
+******
+*/
 func (s *SiteCoordinatorImpl) isActiveSite(site int) bool {
 	uptimeArr := s.SiteUptime[site]
 	return uptimeArr[len(uptimeArr)-1].end == -1
