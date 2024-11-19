@@ -1,4 +1,6 @@
 begin(T1)
 R(T1, x3)
 W(T1, x3, 111)
+W(T1, x16, 1423)
 end(T1)
+dump()

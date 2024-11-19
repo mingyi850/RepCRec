@@ -8,6 +8,11 @@ import (
 	"github.com/mingyi850/repcrec/internal/utils"
 )
 
+/*
+****
+Custom Structs
+****
+*/
 type HistoricalValue struct {
 	value int
 	time  int
@@ -21,10 +26,11 @@ func (h HistoricalValue) GetTime() int {
 	return h.time
 }
 
-type PendingWrite struct {
-	key   int
-	value int
-	time  int
+type DataManager interface {
+	Dump() string
+	Read(key int, time int) HistoricalValue
+	Commit(key int, value int, time int) error
+	GetLastCommitted(key int) HistoricalValue
 }
 
 func CreateDataManager(siteId int) DataManagerImpl {
@@ -33,13 +39,6 @@ func CreateDataManager(siteId int) DataManagerImpl {
 		commitedValues: initValuesMap(siteId),
 	}
 	return result
-}
-
-type DataManager interface {
-	Dump() string // Returns the current state of the data manager
-	Read(key int, time int) HistoricalValue
-	Commit(key int, value int, time int) error
-	GetLastCommitted(key int) HistoricalValue
 }
 
 type DataManagerImpl struct {

@@ -17,7 +17,6 @@ func Simulation(file *os.File, siteCoordinator domain.SiteCoordinator, transacti
 	commentFlag := false
 	for scanner.Scan() {
 		line := scanner.Text()
-		fmt.Println(line)
 		switch {
 		case isCommentStart(line):
 			commentFlag = true
@@ -84,6 +83,8 @@ func Simulation(file *os.File, siteCoordinator domain.SiteCoordinator, transacti
 		case isDump(line):
 			result := siteCoordinator.Dump()
 			fmt.Println(result)
+		case isExit(line):
+			return nil
 		default:
 			return fmt.Errorf("could not parse line %q", line)
 		}
@@ -131,6 +132,10 @@ func isRecover(line string) bool {
 
 func isDump(line string) bool {
 	return strings.HasPrefix(line, "dump")
+}
+
+func isExit(line string) bool {
+	return strings.HasPrefix(line, "exit")
 }
 
 // Example: R(T1, x4) -> 1, 4

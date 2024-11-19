@@ -1,0 +1,18 @@
+/* 
+Test case from pdf
+*/
+
+begin(T1)
+begin(T2)
+begin(T3)
+W(T1, x1, 5)
+W(T3, x2,32)
+W(T2, x1,17)
+// T2 should do this write locally (not to the database). Note that at least
+// one of T1 and T2 will
+// abort when the second one reaches end.
+end(T1)
+end(T3) // This will commit
+end(T2) // This will abort because T1 performed a committed write first and both wrote x1
+
+

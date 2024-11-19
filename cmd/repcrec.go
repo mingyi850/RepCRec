@@ -9,23 +9,28 @@ import (
 )
 
 func main() {
-	if len(os.Args) < 2 {
-		fmt.Println("Usage: repcrec <path>")
-		os.Exit(1)
+	file := os.Stdin
+	var err error
+	if len(os.Args) >= 2 {
+		filename := os.Args[1]
+		fmt.Printf("Opening file %s\n", filename)
+		file, err = os.Open(filename)
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
+		defer file.Close()
 	}
-	filename := os.Args[1]
-	file, err := os.Open(filename)
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+	if file == os.Stdin {
+		fmt.Println("Please enter input and press Ctrl-D or enter exit to exit")
 	}
-	defer file.Close()
 	// Read file line by line
 	siteCoordinator := domain.CreateSiteCoordinator(10)
 	transactionManager := domain.CreateTransactionManager(siteCoordinator)
-	error := internal.Simulation(file, siteCoordinator, transactionManager)
-	if error != nil {
-		fmt.Println(error)
+	err = internal.Simulation(file, siteCoordinator, transactionManager)
+	if err != nil {
+		fmt.Println(err)
+		return
 	}
 	fmt.Println("Completed Successfully")
 }

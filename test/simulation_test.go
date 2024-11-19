@@ -252,4 +252,18 @@ func TestSimulation(t *testing.T) {
 		tx3, _, _ := transactionManager.GetTransaction(3)
 		assert.Equal(t, domain.TxAborted, tx3.GetState())
 	})
+
+	t.Run("Transaction should abort if another commits first", func(t *testing.T) {
+		_, transactionManager, err := runTest("resources/test16.txt")
+		if err != nil {
+			fmt.Printf("Error: %v", err)
+			t.Fatal(err)
+		}
+		tx1, _, _ := transactionManager.GetTransaction(1)
+		assert.Equal(t, domain.TxCommitted, tx1.GetState())
+		tx2, _, _ := transactionManager.GetTransaction(2)
+		assert.Equal(t, domain.TxAborted, tx2.GetState())
+		tx3, _, _ := transactionManager.GetTransaction(3)
+		assert.Equal(t, domain.TxCommitted, tx3.GetState())
+	})
 }
