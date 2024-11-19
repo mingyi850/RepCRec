@@ -1,29 +1,27 @@
-# CSCI-GA.2434-001- Advanced Database Systems
-# Fall 2024
-Mingyi Lim:
-
-ml9027@nyu.edu
-
 # Replicated Concurrency Control and Recovery (RepCRec)
 
 ## Summary
-This project aims to implement a distributed database with serializable snapshot isolation, replication and failure recovery using the available copies method.
+This project aims to implement a simple K-V distributed database with serializable snapshot isolation, replication and failure recovery using available copies.
 
 ## Running the Project
-The project is written almost entirely in golang.
+The project is written in golang.
 To run the project, ensure you have golang installed
 
 1. Build the binary
     ``` 
     make
     ```
-2. Run  
+	Ensure that you have permission to run the binary
+	```
+	chmod +x repcrec
+	```
+2. Run in console mode (reads instructions from stdin)
+    ```
+    ./repcrec
+    ```
+3. Run in file mode (reads instructions from file)
     ```
     ./repcrec <inputfile>
-    ```
-3. To output results to a file, use 
-    ```
-    ./repcrec <inputfile> >> <outputfile>
     ```
 
 The program will output each line from the input, followed by the outcome of the operation. If any error is encountered during the parasing of the file or the operation of the program, it will terminate with the specified error.
@@ -117,6 +115,9 @@ type DataManager interface {
 }
 ```
 
+We provide more detailed information about each component and it's methods in the code.
+
+
 ## Testing 
 We provide unit tests in the /test folder.
 To run unit tests, execute 
@@ -125,6 +126,7 @@ make test
 ```
 This will run the unit tests linked to the test scripts in the ```test/resources``` folder
 
+The ```test/resources``` folder contains a list of test cases and descriptions about what should happen in those cases.
 
 
 
