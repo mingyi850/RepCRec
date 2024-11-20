@@ -119,7 +119,7 @@ We provide more detailed information about each component and it's methods in th
 
 
 ## Testing 
-We provide unit tests in the /test folder.
+We provide unit tests in the ```/test``` folder.
 To run unit tests, execute 
 ``` 
 make test 
