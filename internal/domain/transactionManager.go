@@ -96,7 +96,7 @@ type ReadResult struct {
 type Transaction struct {
 	id                  int
 	startTime           int
-	siteWrites          map[int]Operation
+	siteWrites          map[int][]Operation
 	pendingOperations   []Operation
 	completedOperations map[int][]Operation
 	waitingSites        map[int]bool
@@ -154,7 +154,7 @@ func (t *TransactionManagerImpl) Begin(tx int, time int) error {
 	t.TransactionMap[tx] = &Transaction{
 		id:                  tx,
 		startTime:           time,
-		siteWrites:          make(map[int]Operation),
+		siteWrites:          make(map[int][]Operation),
 		pendingOperations:   make([]Operation, 0),
 		completedOperations: make(map[int][]Operation, 0),
 		waitingSites:        make(map[int]bool),
@@ -186,17 +186,19 @@ func (t *TransactionManagerImpl) End(tx int, time int) (CommitResult, error) {
 	if transaction.state != TxActive {
 		return CommitResult{Aborted, "Transaction is not active"}, nil
 	}
-	for site, operation := range transaction.siteWrites {
-		result := t.SiteCoordinator.VerifySiteWrite(site, operation.key, operation.time, time)
-		switch result {
-		case SiteDown:
-			t.abortTransaction(tx)
-			return CommitResult{Abort, fmt.Sprintf("Site %d was down between write to x%d and commit", site, operation.key)}, nil
-		case SiteStale:
-			t.abortTransaction(tx)
-			return CommitResult{Abort, fmt.Sprintf("Write to x%d was stale at site %d", operation.key, site)}, nil
-		case SiteOk:
-			continue
+	for site, operations := range transaction.siteWrites {
+		for _, operation := range operations {
+			result := t.SiteCoordinator.VerifySiteWrite(site, operation.key, operation.time, time)
+			switch result {
+			case SiteDown:
+				t.abortTransaction(tx)
+				return CommitResult{Abort, fmt.Sprintf("Site %d was down between write to x%d and commit", site, operation.key)}, nil
+			case SiteStale:
+				t.abortTransaction(tx)
+				return CommitResult{Abort, fmt.Sprintf("Write to x%d was stale at site %d", operation.key, site)}, nil
+			case SiteOk:
+				continue
+			}
 		}
 	}
 	rwCycles := t.TransactionGraph.FindRWCycles(tx)
@@ -337,10 +339,12 @@ func (t *TransactionManagerImpl) commitTransaction(tx int, currentTime int) erro
 	if transaction.state != TxActive {
 		return fmt.Errorf("Transaction %d is not active", tx)
 	}
-	for site, operation := range transaction.siteWrites {
-		err := t.SiteCoordinator.CommitSiteWrite(site, operation.key, operation.value, currentTime)
-		if err != nil {
-			return err
+	for site, operations := range transaction.siteWrites {
+		for _, operation := range operations {
+			err := t.SiteCoordinator.CommitSiteWrite(site, operation.key, operation.value, currentTime)
+			if err != nil {
+				return err
+			}
 		}
 	}
 	transaction.state = TxCommitted
@@ -491,7 +495,7 @@ func (tx *Transaction) GetState() TransactionState {
 }
 
 /* Returns the sites a transaction has written to */
-func (tx *Transaction) GetSiteWrites() map[int]Operation {
+func (tx *Transaction) GetSiteWrites() map[int][]Operation {
 	return tx.siteWrites
 }
 
@@ -514,7 +518,7 @@ func (tx *Transaction) appendCompletedOperation(operation Operation) error {
 
 /* Adds a write operation to the siteWrites map of a transaction */
 func (tx *Transaction) addSiteWrite(site int, key int, value int, time int) error {
-	tx.siteWrites[site] = Operation{Write, key, value, time}
+	tx.siteWrites[site] = append(tx.siteWrites[site], Operation{Write, key, value, time})
 	return nil
 }
 

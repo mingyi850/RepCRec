@@ -1,0 +1,22 @@
+// Test 2
+// No aborts happens, since all transactions use
+// serializable snapshot isolation
+
+begin(T1)
+begin(T2)
+W(T1,x1,101) 
+R(T2,x2)
+W(T1,x2,102) 
+R(T2,x1)
+end(T1) 
+end(T2)
+dump()
+
+/*
+===
+reads return initial values of each variable, so 10 for x1 and 20 for x2.
+=== output of dump
+x1: 101 at site 2
+x2: 102 at all sites
+All other variables have their initial values.
+*/
