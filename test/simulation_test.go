@@ -193,15 +193,15 @@ func TestSimulation(t *testing.T) {
 			t.Fatal(err)
 		}
 		tx1, _, _ := transactionManager.GetTransaction(1)
-		assert.Equal(t, domain.TxAborted, tx1.GetState())
+		assert.Equal(t, domain.TxCommitted, tx1.GetState())
 		tx2, _, _ := transactionManager.GetTransaction(2)
 		assert.Equal(t, domain.TxCommitted, tx2.GetState())
 		tx3, _, _ := transactionManager.GetTransaction(3)
-		assert.Equal(t, domain.TxCommitted, tx3.GetState())
+		assert.Equal(t, domain.TxAborted, tx3.GetState())
 
 		assert.Equal(t, 222, siteCoordinator.GetLatestValue(1, 4).GetValue()) // Tx writes to x4
-		assert.Equal(t, 333, siteCoordinator.GetLatestValue(4, 3).GetValue()) // Tx writes to x4
-		assert.Equal(t, 333, siteCoordinator.GetLatestValue(6, 5).GetValue()) // Tx writes to x4
+		assert.Equal(t, 30, siteCoordinator.GetLatestValue(4, 3).GetValue())  // Tx writes to x4
+		assert.Equal(t, 111, siteCoordinator.GetLatestValue(6, 5).GetValue()) // Tx writes to x4
 
 	})
 
@@ -214,12 +214,11 @@ func TestSimulation(t *testing.T) {
 		tx1, _, _ := transactionManager.GetTransaction(1)
 		assert.Equal(t, domain.TxCommitted, tx1.GetState())
 		tx2, _, _ := transactionManager.GetTransaction(2)
-		assert.Equal(t, domain.TxAborted, tx2.GetState())
+		assert.Equal(t, domain.TxCommitted, tx2.GetState())
 		tx3, _, _ := transactionManager.GetTransaction(3)
 		assert.Equal(t, domain.TxCommitted, tx3.GetState())
 		tx4, _, _ := transactionManager.GetTransaction(4)
-		assert.Equal(t, domain.TxCommitted, tx4.GetState())
-
+		assert.Equal(t, domain.TxAborted, tx4.GetState())
 	})
 
 	t.Run("RWRW in graph cycle - abort avoided by strategic commits", func(t *testing.T) {

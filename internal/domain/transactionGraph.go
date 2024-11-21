@@ -6,7 +6,9 @@ Description: This file contains the implementation of the TransactionGraph struc
 
 package domain
 
-import "fmt"
+import (
+	"fmt"
+)
 
 /*
 ************
@@ -21,20 +23,23 @@ type Edge struct {
 
 /* Uses an adjacency list to represent the transaction graph */
 type TransactionGraph struct {
-	graph map[int]map[int]ConflictType
+	commitTimes map[int]int
+	graph       map[int]map[int]ConflictType
 }
 
 /* Creates and returns an instance of the TransactionGraph */
 func CreateTransactionGraph() TransactionGraph {
 	return TransactionGraph{
-		graph: make(map[int]map[int]ConflictType),
+		graph:       make(map[int]map[int]ConflictType),
+		commitTimes: make(map[int]int),
 	}
 }
 
 /* Adds a new node to the graph which represents a new transaction */
-func (t *TransactionGraph) AddNode(tx int) {
+func (t *TransactionGraph) AddNode(tx int, time int) {
 	if _, exists := t.graph[tx]; !exists {
 		t.graph[tx] = make(map[int]ConflictType)
+		t.commitTimes[tx] = time
 	}
 }
 
@@ -65,6 +70,30 @@ func (t *TransactionGraph) RemoveNode(tx int) {
 	for _, edges := range t.graph {
 		delete(edges, tx)
 	}
+	delete(t.commitTimes, tx)
+}
+
+func (t *TransactionGraph) PurgeGraph(earliestStart int) {
+	for tx, time := range t.commitTimes {
+		if time < earliestStart {
+			t.RemoveNode(tx)
+		}
+	}
+}
+
+func (t *TransactionGraph) TryCommitTransaction(tx int, incomingConflicts map[int]ConflictType, outgoingConflicts map[int]ConflictType, time int) bool {
+	t.AddNode(tx, time)
+	for from, edgeType := range incomingConflicts {
+		t.AddEdge(from, tx, edgeType)
+	}
+	for to, edgeType := range outgoingConflicts {
+		t.AddEdge(tx, to, edgeType)
+	}
+	if t.FindRWCycles(tx) {
+		t.RemoveNode(tx)
+		return false
+	}
+	return true
 }
 
 /* Checks if RW-RW cycles exist in the graph. Returns true if so and false otherwise */
@@ -87,6 +116,22 @@ func (t *TransactionGraph) GetGraph() map[int]map[int]ConflictType {
 /* Get all edges from a node (for debugging / testing) */
 func (t *TransactionGraph) GetEdges(tx int) map[int]ConflictType {
 	return t.graph[tx]
+}
+
+/* Get all active nodes in the graph */
+func (t *TransactionGraph) GetNodes() []int {
+	nodes := make([]int, 0)
+	for node := range t.graph {
+		nodes = append(nodes, node)
+	}
+	return nodes
+}
+
+func (t *TransactionGraph) GetCommitTime(tx int) (int, error) {
+	if time, exists := t.commitTimes[tx]; exists {
+		return time, nil
+	}
+	return 0, fmt.Errorf("Transaction %d has not committed", tx)
 }
 
 /*

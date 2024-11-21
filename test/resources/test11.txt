@@ -12,9 +12,9 @@ R(T2, x3)
 W(T3, x3, 333)
 W(T3, x5, 333)
 W(T1, x5, 111)
-end(T1) // Should abort due to RW cycle
+end(T1) // Should commit
 end(T2) // Should commit
-end(T3) // Should commit.
+end(T3) // Should abort due to RW cycle.
 
 
 

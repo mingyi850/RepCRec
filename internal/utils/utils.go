@@ -17,3 +17,9 @@ func GetMapKeys[K comparable, V any](m map[K]V) []K {
 	}
 	return keys
 }
+
+func AddIfAbsent[K comparable, V any](m map[K]V, key K, value V) {
+	if _, ok := m[key]; !ok {
+		m[key] = value
+	}
+}

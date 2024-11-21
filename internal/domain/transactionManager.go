@@ -101,6 +101,7 @@ type Transaction struct {
 	completedOperations map[int][]Operation
 	waitingSites        map[int]bool
 	state               TransactionState
+	endTime             int
 }
 
 /*
@@ -159,8 +160,8 @@ func (t *TransactionManagerImpl) Begin(tx int, time int) error {
 		completedOperations: make(map[int][]Operation, 0),
 		waitingSites:        make(map[int]bool),
 		state:               TxActive,
+		endTime:             -1,
 	}
-	t.TransactionGraph.AddNode(tx)
 	return nil
 }
 
@@ -186,6 +187,7 @@ func (t *TransactionManagerImpl) End(tx int, time int) (CommitResult, error) {
 	if transaction.state != TxActive {
 		return CommitResult{Aborted, "Transaction is not active"}, nil
 	}
+	transaction.endTime = time
 	for site, operations := range transaction.siteWrites {
 		for _, operation := range operations {
 			result := t.SiteCoordinator.VerifySiteWrite(site, operation.key, operation.time, time)
@@ -201,8 +203,15 @@ func (t *TransactionManagerImpl) End(tx int, time int) (CommitResult, error) {
 			}
 		}
 	}
-	rwCycles := t.TransactionGraph.FindRWCycles(tx)
-	if rwCycles {
+	// Purge old transactions
+	t.TransactionGraph.PurgeGraph(t.findEarliestActiveStart())
+	// Find new conflicts
+	incomingConflicts, outgoingConflicts, err := t.findTransactionConflicts(tx)
+	if err != nil {
+		return CommitResult{Abort, ""}, err
+	}
+	graphCommitSuccess := t.TransactionGraph.TryCommitTransaction(tx, incomingConflicts, outgoingConflicts, time)
+	if !graphCommitSuccess {
 		t.abortTransaction(tx)
 		return CommitResult{Abort, fmt.Sprintf("Tx: %d, RW cycle detected", tx)}, nil
 	}
@@ -439,50 +448,108 @@ func (t *TransactionManagerImpl) runPendingOperations(tx *Transaction, recoverTi
 	return nil
 }
 
-/* Removes a transaction from the TransactionMap and TransactionGraph */
+func (t *TransactionManagerImpl) findEarliestActiveStart() int {
+	earliest := -1
+	for _, transaction := range t.TransactionMap {
+		if (transaction.state == TxActive || transaction.state == TxWaiting) && (earliest == -1 || transaction.startTime < earliest) {
+			earliest = transaction.startTime
+		}
+	}
+	return earliest
+}
+
+/* Clears metadata from completed transaction */
 func (t *TransactionManagerImpl) removeTransaction(tx int) {
 	delete(t.WaitingTransactions, tx)
-	t.TransactionGraph.RemoveNode(tx)
 }
 
 /* Completes an operation by adding the operation to the transaction's completed operations and updating the TransactionGraph with conflicts */
 func (t *TransactionManagerImpl) completeOperation(transaction Transaction, operation Operation) error {
 	transaction.appendCompletedOperation(operation)
-	conflicts := t.findConflicts(transaction.id, operation)
-	for tx, conflictMap := range conflicts {
-		for conflictType := range conflictMap {
-			t.TransactionGraph.AddEdge(tx, transaction.id, conflictType)
-		}
-	}
 	return nil
 }
+func (t *TransactionManagerImpl) findTransactionConflicts(tx int) (map[int]ConflictType, map[int]ConflictType, error) {
+	transaction, waiting, err := t.GetTransaction(tx)
+	incomingConflicts := make(map[int]ConflictType)
+	outgoingConflicts := make(map[int]ConflictType)
+	if err != nil {
+		return incomingConflicts, outgoingConflicts, err
+	}
+	if waiting {
+		return incomingConflicts, outgoingConflicts, fmt.Errorf("Transaction %d is waiting", tx)
+	}
+	if transaction.state != TxActive {
+		return incomingConflicts, outgoingConflicts, fmt.Errorf("Transaction %d is not active", tx)
+	}
+	committedTransactions := t.TransactionGraph.GetNodes()
+	for _, operations := range transaction.completedOperations {
+		for _, operation := range operations {
+			incoming, outgoing, err := t.findOperationConflicts(operation, *transaction, committedTransactions)
+			if err != nil {
+				return incomingConflicts, outgoingConflicts, err
+			}
+			t.mergeConflicts(incomingConflicts, incoming)
+			t.mergeConflicts(outgoingConflicts, outgoing)
+		}
+	}
+	return incomingConflicts, outgoingConflicts, nil
+}
 
-/* Finds conflicts between a transaction and all other transactions in the TransactionMap */
-func (t *TransactionManagerImpl) findConflicts(original int, operation Operation) map[int]map[ConflictType]bool {
-	result := make(map[int]map[ConflictType]bool)
-	for tx, transaction := range t.TransactionMap {
-		if tx != original {
-			result[tx] = make(map[ConflictType]bool)
-			pastOperations := transaction.completedOperations[operation.key]
-			for _, pastOp := range pastOperations {
-				switch operation.operationType {
+/*
+Finds conflicts between a transaction and all other transactions in the TransactionMap
+1. Only committed transactions are in the TransactionMap
+2. Case 1: WW Conflict -> If another transaction committed first, then it will create an edge to this one. No exceptions here
+3. Case 2: WR Conflict -> If another transaction committed first, if this transaction started after the other transaction committed, then it will create a WR edge to this one
+4. Case 3: RW Conflict -> If another transasction committed first, if this transaction started after the other transaction committed, then it will create a RW edge from this one
+*/
+func (t *TransactionManagerImpl) findOperationConflicts(operation Operation, transaction Transaction, committedTransactions []int) (map[int]ConflictType, map[int]ConflictType, error) {
+	incomingEdges := make(map[int]ConflictType)
+	outgoingEdges := make(map[int]ConflictType)
+	for _, tx := range committedTransactions {
+		pastTransaction, _, err := t.GetTransaction(tx)
+		if err != nil {
+			return incomingEdges, outgoingEdges, err
+		}
+		pastOperations := pastTransaction.completedOperations[operation.key]
+		for _, pastOp := range pastOperations {
+			switch operation.operationType {
+			case Write:
+				switch pastOp.operationType {
 				case Write:
-					switch pastOp.operationType {
-					case Write:
-						result[tx][WW] = true
-					case Read:
-						result[tx][RW] = true
-					}
+					t.mergeConflict(incomingEdges, tx, WW)
 				case Read:
-					switch pastOp.operationType {
-					case Write:
-						result[tx][WR] = true
+					t.mergeConflict(incomingEdges, tx, RW)
+				}
+			case Read:
+				switch pastOp.operationType {
+				case Write:
+					if pastTransaction.endTime < transaction.startTime { // Current Read started after past write committed
+						t.mergeConflict(incomingEdges, tx, WR)
+					} else {
+						t.mergeConflict(outgoingEdges, tx, RW)
 					}
 				}
 			}
 		}
 	}
-	return result
+	return incomingEdges, outgoingEdges, nil
+}
+
+func (t *TransactionManagerImpl) mergeConflict(conflicts map[int]ConflictType, transaction int, conflict ConflictType) {
+	switch conflict {
+	case WW:
+		utils.AddIfAbsent(conflicts, transaction, WW)
+	case WR:
+		utils.AddIfAbsent(conflicts, transaction, WR)
+	case RW:
+		conflicts[transaction] = RW //Append regardless for RW conflict
+	}
+}
+
+func (t *TransactionManagerImpl) mergeConflicts(original map[int]ConflictType, incoming map[int]ConflictType) {
+	for tx, conflict := range incoming {
+		t.mergeConflict(original, tx, conflict)
+	}
 }
 
 /**********
