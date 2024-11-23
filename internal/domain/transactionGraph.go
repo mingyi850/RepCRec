@@ -92,7 +92,7 @@ func (t *TransactionGraph) PurgeGraph(earliestStart int) {
 		}
 	}
 	if deletedNodes {
-		// Recursively delete nodes until none can be deleted
+		// Recursively delete nodes until stable
 		t.PurgeGraph(earliestStart)
 	}
 }

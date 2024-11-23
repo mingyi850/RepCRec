@@ -48,10 +48,10 @@ func TestSimulation(t *testing.T) {
 	})
 
 	t.Run("Should terminate on invalid operation", func(t *testing.T) {
-		siteManager, _, err := runTest("resources/test3.txt")
+		siteCoordinator, _, err := runTest("resources/test3.txt")
 		if err != nil {
 			assert.Contains(t, err.Error(), "does not exist")
-			assert.Equal(t, 40, siteManager.GetLatestValue(1, 4).GetValue()) // Original value of 4
+			assert.Equal(t, 40, siteCoordinator.GetLatestValue(1, 4).GetValue()) // Original value of 4
 
 		} else {
 			t.Fatal("Expected error to be thrown")
@@ -459,7 +459,7 @@ func TestSimulation(t *testing.T) {
 	})
 
 	t.Run("Only first commit wins", func(t *testing.T) {
-		siteManager, transactionManager, err := runTest("resources/test31.txt")
+		siteCoordinator, transactionManager, err := runTest("resources/test31.txt")
 		if err != nil {
 			fmt.Printf("Error: %v", err)
 			t.Fatal(err)
@@ -470,11 +470,11 @@ func TestSimulation(t *testing.T) {
 		assert.Equal(t, domain.TxAborted, tx1.GetState())
 		assert.Equal(t, domain.TxAborted, tx2.GetState())
 		assert.Equal(t, domain.TxCommitted, tx3.GetState())
-		assert.Equal(t, 10, siteManager.GetLatestValue(5, 2).GetValue())
+		assert.Equal(t, 10, siteCoordinator.GetLatestValue(5, 2).GetValue())
 	})
 
 	t.Run("Only first commit wins (part 2)", func(t *testing.T) {
-		siteManager, transactionManager, err := runTest("resources/test32.txt")
+		siteCoordinator, transactionManager, err := runTest("resources/test32.txt")
 		if err != nil {
 			fmt.Printf("Error: %v", err)
 			t.Fatal(err)
@@ -485,11 +485,11 @@ func TestSimulation(t *testing.T) {
 		assert.Equal(t, domain.TxCommitted, tx1.GetState())
 		assert.Equal(t, domain.TxAborted, tx2.GetState())
 		assert.Equal(t, domain.TxAborted, tx3.GetState())
-		assert.Equal(t, 20, siteManager.GetLatestValue(5, 2).GetValue())
+		assert.Equal(t, 20, siteCoordinator.GetLatestValue(5, 2).GetValue())
 	})
 
 	t.Run("Complex case - transasction aborts due to failure, then first commit wins", func(t *testing.T) {
-		siteManager, transactionManager, err := runTest("resources/test33.txt")
+		siteCoordinator, transactionManager, err := runTest("resources/test33.txt")
 		if err != nil {
 			fmt.Printf("Error: %v", err)
 			t.Fatal(err)
@@ -504,7 +504,7 @@ func TestSimulation(t *testing.T) {
 		assert.Equal(t, domain.TxAborted, tx3.GetState())
 		assert.Equal(t, domain.TxAborted, tx4.GetState())
 		assert.Equal(t, domain.TxAborted, tx5.GetState())
-		assert.Equal(t, 44, siteManager.GetLatestValue(5, 4).GetValue())
+		assert.Equal(t, 44, siteCoordinator.GetLatestValue(5, 4).GetValue())
 	})
 
 	t.Run("Snapshot isolation - reads value from when transaction began", func(t *testing.T) {
