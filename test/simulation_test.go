@@ -265,4 +265,403 @@ func TestSimulation(t *testing.T) {
 		tx3, _, _ := transactionManager.GetTransaction(3)
 		assert.Equal(t, domain.TxCommitted, tx3.GetState())
 	})
+
+	t.Run("Write conflict between T1 and T2", func(t *testing.T) {
+		siteCoordinator, transactionManager, err := runTest("resources/test17.txt")
+		if err != nil {
+			fmt.Printf("Error: %v", err)
+			t.Fatal(err)
+		}
+		tx1, _, _ := transactionManager.GetTransaction(1)
+		assert.Equal(t, domain.TxAborted, tx1.GetState())
+		tx2, _, _ := transactionManager.GetTransaction(2)
+		assert.Equal(t, domain.TxCommitted, tx2.GetState())
+		siteCoordinator.Dump()
+		assert.Equal(t, 201, siteCoordinator.GetLatestValue(2, 1).GetValue())
+		assert.Equal(t, 202, siteCoordinator.GetLatestValue(4, 2).GetValue())
+	})
+
+	t.Run("Serializable snapshot - no conflicts", func(t *testing.T) {
+		siteCoordinator, transactionManager, err := runTest("resources/test18.txt")
+		if err != nil {
+			fmt.Printf("Error: %v", err)
+			t.Fatal(err)
+		}
+		tx1, _, _ := transactionManager.GetTransaction(1)
+		assert.Equal(t, domain.TxCommitted, tx1.GetState())
+		tx2, _, _ := transactionManager.GetTransaction(2)
+		assert.Equal(t, domain.TxCommitted, tx2.GetState())
+		siteCoordinator.Dump()
+		assert.Equal(t, 101, siteCoordinator.GetLatestValue(2, 1).GetValue())
+		assert.Equal(t, 102, siteCoordinator.GetLatestValue(4, 2).GetValue())
+	})
+
+	t.Run("All transaction commits despite site failure", func(t *testing.T) {
+		siteCoordinator, transactionManager, err := runTest("resources/test19.txt")
+		if err != nil {
+			fmt.Printf("Error: %v", err)
+			t.Fatal(err)
+		}
+		tx1, _, _ := transactionManager.GetTransaction(1)
+		assert.Equal(t, domain.TxCommitted, tx1.GetState())
+		tx2, _, _ := transactionManager.GetTransaction(2)
+		assert.Equal(t, domain.TxCommitted, tx2.GetState())
+		siteCoordinator.Dump()
+		assert.Equal(t, 80, siteCoordinator.GetLatestValue(2, 8).GetValue())
+		assert.Equal(t, 88, siteCoordinator.GetLatestValue(4, 8).GetValue())
+	})
+
+	t.Run("Write is lost due to abort", func(t *testing.T) {
+		siteCoordinator, transactionManager, err := runTest("resources/test20.txt")
+		if err != nil {
+			fmt.Printf("Error: %v", err)
+			t.Fatal(err)
+		}
+		tx1, _, _ := transactionManager.GetTransaction(1)
+		assert.Equal(t, domain.TxCommitted, tx1.GetState())
+		tx2, _, _ := transactionManager.GetTransaction(2)
+		assert.Equal(t, domain.TxAborted, tx2.GetState())
+		siteCoordinator.Dump()
+		assert.Equal(t, 40, siteCoordinator.GetLatestValue(2, 4).GetValue())
+		assert.Equal(t, 91, siteCoordinator.GetLatestValue(4, 4).GetValue())
+	})
+
+	t.Run("Write is lost due to abort (part 2)", func(t *testing.T) {
+		siteCoordinator, transactionManager, err := runTest("resources/test21.txt")
+		if err != nil {
+			fmt.Printf("Error: %v", err)
+			t.Fatal(err)
+		}
+		tx1, _, _ := transactionManager.GetTransaction(1)
+		assert.Equal(t, domain.TxCommitted, tx1.GetState())
+		tx2, _, _ := transactionManager.GetTransaction(2)
+		assert.Equal(t, domain.TxAborted, tx2.GetState())
+		siteCoordinator.Dump()
+		assert.Equal(t, 91, siteCoordinator.GetLatestValue(2, 4).GetValue())
+		assert.Equal(t, 91, siteCoordinator.GetLatestValue(4, 4).GetValue())
+	})
+
+	t.Run("Write is lost due to abort (part 3)", func(t *testing.T) {
+		siteCoordinator, transactionManager, err := runTest("resources/test22.txt")
+		if err != nil {
+			fmt.Printf("Error: %v", err)
+			t.Fatal(err)
+		}
+		tx1, _, _ := transactionManager.GetTransaction(1)
+		assert.Equal(t, domain.TxAborted, tx1.GetState())
+		tx2, _, _ := transactionManager.GetTransaction(2)
+		assert.Equal(t, domain.TxCommitted, tx2.GetState())
+		siteCoordinator.Dump()
+		assert.Equal(t, 80, siteCoordinator.GetLatestValue(2, 8).GetValue())
+		assert.Equal(t, 88, siteCoordinator.GetLatestValue(4, 8).GetValue())
+	})
+
+	t.Run("Write is lost due to abort (part 4)", func(t *testing.T) {
+		_, transactionManager, err := runTest("resources/test23.txt")
+		if err != nil {
+			fmt.Printf("Error: %v", err)
+			t.Fatal(err)
+		}
+		tx1, _, _ := transactionManager.GetTransaction(1)
+		assert.Equal(t, domain.TxAborted, tx1.GetState())
+		tx2, _, _ := transactionManager.GetTransaction(2)
+		assert.Equal(t, domain.TxCommitted, tx2.GetState())
+	})
+
+	t.Run("Read from unreplicated variable at recovering site is allowed", func(t *testing.T) {
+		siteCoordinator, transactionManager, err := runTest("resources/test24.txt")
+		if err != nil {
+			fmt.Printf("Error: %v", err)
+			t.Fatal(err)
+		}
+		tx1, _, _ := transactionManager.GetTransaction(1)
+		assert.Equal(t, domain.TxCommitted, tx1.GetState())
+		tx2, _, _ := transactionManager.GetTransaction(2)
+		assert.Equal(t, domain.TxCommitted, tx2.GetState())
+		assert.Equal(t, 80, siteCoordinator.GetLatestValue(3, 8).GetValue())
+		assert.Equal(t, 80, siteCoordinator.GetLatestValue(4, 8).GetValue())
+		assert.Equal(t, 88, siteCoordinator.GetLatestValue(5, 8).GetValue())
+	})
+
+	t.Run("Snapshot isolation reads from original version of site at transaction begin", func(t *testing.T) {
+		_, transactionManager, err := runTest("resources/test25.txt")
+		if err != nil {
+			fmt.Printf("Error: %v", err)
+			t.Fatal(err)
+		}
+		result, _ := transactionManager.Read(2, 3, 10)
+		assert.Equal(t, 30, result.Value)
+	})
+
+	t.Run("Snapshot isolation reads from original version of site at transaction begin (part 2)", func(t *testing.T) {
+		_, transactionManager, err := runTest("resources/test26.txt")
+		if err != nil {
+			fmt.Printf("Error: %v", err)
+			t.Fatal(err)
+		}
+		tx2Result, _ := transactionManager.Read(2, 3, 11)
+		assert.Equal(t, 30, tx2Result.Value)
+		tx3Result, _ := transactionManager.Read(3, 3, 10)
+		assert.Equal(t, 33, tx3Result.Value)
+	})
+
+	t.Run("Snapshot isolation reads from original version of site at transaction begin (part 3)", func(t *testing.T) {
+		_, transactionManager, err := runTest("resources/test27.txt")
+		if err != nil {
+			fmt.Printf("Error: %v", err)
+			t.Fatal(err)
+		}
+		tx3Read, _ := transactionManager.Read(3, 4, 10)
+		assert.Equal(t, 40, tx3Read.Value)
+		transactionManager.End(2, 11)
+		transactionManager.End(3, 12)
+		tx1Read, _ := transactionManager.Read(1, 2, 13)
+		assert.Equal(t, 20, tx1Read.Value)
+	})
+
+	t.Run("Snapshot isolation reads from new version of site at transaction begin.", func(t *testing.T) {
+		_, transactionManager, err := runTest("resources/test28.txt")
+		if err != nil {
+			fmt.Printf("Error: %v", err)
+			t.Fatal(err)
+		}
+		tx3Read, _ := transactionManager.Read(3, 4, 10)
+		assert.Equal(t, 40, tx3Read.Value)
+		transactionManager.End(2, 11)
+		transactionManager.End(3, 12)
+		transactionManager.Begin(1, 13)
+		tx1Read, _ := transactionManager.Read(1, 2, 14)
+		assert.Equal(t, 22, tx1Read.Value)
+	})
+
+	t.Run("All transactions commit if no conflict occurs", func(t *testing.T) {
+		_, transactionManager, err := runTest("resources/test29.txt")
+		if err != nil {
+			fmt.Printf("Error: %v", err)
+			t.Fatal(err)
+		}
+		tx1, _, _ := transactionManager.GetTransaction(1)
+		tx2, _, _ := transactionManager.GetTransaction(2)
+		assert.Equal(t, domain.TxCommitted, tx1.GetState())
+		assert.Equal(t, domain.TxCommitted, tx2.GetState())
+	})
+
+	t.Run("All transactions commit if no conflict occurs (part 2)", func(t *testing.T) {
+		_, transactionManager, err := runTest("resources/test30.txt")
+		if err != nil {
+			fmt.Printf("Error: %v", err)
+			t.Fatal(err)
+		}
+		tx1, _, _ := transactionManager.GetTransaction(1)
+		tx2, _, _ := transactionManager.GetTransaction(2)
+		assert.Equal(t, domain.TxCommitted, tx1.GetState())
+		assert.Equal(t, domain.TxCommitted, tx2.GetState())
+	})
+
+	t.Run("Only first commit wins", func(t *testing.T) {
+		siteManager, transactionManager, err := runTest("resources/test31.txt")
+		if err != nil {
+			fmt.Printf("Error: %v", err)
+			t.Fatal(err)
+		}
+		tx1, _, _ := transactionManager.GetTransaction(1)
+		tx2, _, _ := transactionManager.GetTransaction(2)
+		tx3, _, _ := transactionManager.GetTransaction(3)
+		assert.Equal(t, domain.TxAborted, tx1.GetState())
+		assert.Equal(t, domain.TxAborted, tx2.GetState())
+		assert.Equal(t, domain.TxCommitted, tx3.GetState())
+		assert.Equal(t, 10, siteManager.GetLatestValue(5, 2).GetValue())
+	})
+
+	t.Run("Only first commit wins (part 2)", func(t *testing.T) {
+		siteManager, transactionManager, err := runTest("resources/test32.txt")
+		if err != nil {
+			fmt.Printf("Error: %v", err)
+			t.Fatal(err)
+		}
+		tx1, _, _ := transactionManager.GetTransaction(1)
+		tx2, _, _ := transactionManager.GetTransaction(2)
+		tx3, _, _ := transactionManager.GetTransaction(3)
+		assert.Equal(t, domain.TxCommitted, tx1.GetState())
+		assert.Equal(t, domain.TxAborted, tx2.GetState())
+		assert.Equal(t, domain.TxAborted, tx3.GetState())
+		assert.Equal(t, 20, siteManager.GetLatestValue(5, 2).GetValue())
+	})
+
+	t.Run("Complex case - transasction aborts due to failure, then first commit wins", func(t *testing.T) {
+		siteManager, transactionManager, err := runTest("resources/test33.txt")
+		if err != nil {
+			fmt.Printf("Error: %v", err)
+			t.Fatal(err)
+		}
+		tx1, _, _ := transactionManager.GetTransaction(1)
+		tx2, _, _ := transactionManager.GetTransaction(2)
+		tx3, _, _ := transactionManager.GetTransaction(3)
+		tx4, _, _ := transactionManager.GetTransaction(4)
+		tx5, _, _ := transactionManager.GetTransaction(5)
+		assert.Equal(t, domain.TxAborted, tx1.GetState())
+		assert.Equal(t, domain.TxCommitted, tx2.GetState())
+		assert.Equal(t, domain.TxAborted, tx3.GetState())
+		assert.Equal(t, domain.TxAborted, tx4.GetState())
+		assert.Equal(t, domain.TxAborted, tx5.GetState())
+		assert.Equal(t, 44, siteManager.GetLatestValue(5, 4).GetValue())
+	})
+
+	t.Run("Snapshot isolation - reads value from when transaction began", func(t *testing.T) {
+		_, transactionManager, err := runTest("resources/test34.txt")
+		if err != nil {
+			fmt.Printf("Error: %v", err)
+			t.Fatal(err)
+		}
+		t3Read, _ := transactionManager.Read(3, 4, 10)
+		transactionManager.End(2, 11)
+		transactionManager.End(3, 12)
+		transactionManager.Begin(1, 13)
+		t1Read, _ := transactionManager.Read(1, 2, 14)
+		assert.Equal(t, 22, t1Read.Value)
+		assert.Equal(t, 40, t3Read.Value)
+	})
+
+	t.Run("Snapshot isolation - reads value from when transaction began. Ignore aborted writes", func(t *testing.T) {
+		siteCoordinator, transactionManager, err := runTest("resources/test35.txt")
+		if err != nil {
+			fmt.Printf("Error: %v", err)
+			t.Fatal(err)
+		}
+		t3Read, _ := transactionManager.Read(3, 3, 10)
+		transactionManager.End(2, 11)
+		siteCoordinator.Fail(4, 12)
+		transactionManager.End(3, 13)
+		transactionManager.Begin(1, 14)
+		t1Read, _ := transactionManager.Read(1, 2, 15)
+		assert.Equal(t, 20, t1Read.Value)
+		assert.Equal(t, 30, t3Read.Value)
+	})
+
+	t.Run("Circular conflict - all RW edges. Cycle closing transaction aborted", func(t *testing.T) {
+		_, transactionManager, err := runTest("resources/test36.txt")
+		if err != nil {
+			fmt.Printf("Error: %v", err)
+			t.Fatal(err)
+		}
+		tx1, _, _ := transactionManager.GetTransaction(1)
+		tx2, _, _ := transactionManager.GetTransaction(2)
+		tx3, _, _ := transactionManager.GetTransaction(3)
+		tx4, _, _ := transactionManager.GetTransaction(4)
+		tx5, _, _ := transactionManager.GetTransaction(5)
+		assert.Equal(t, domain.TxCommitted, tx1.GetState())
+		assert.Equal(t, domain.TxCommitted, tx2.GetState())
+		assert.Equal(t, domain.TxCommitted, tx3.GetState())
+		assert.Equal(t, domain.TxCommitted, tx4.GetState())
+		assert.Equal(t, domain.TxAborted, tx5.GetState())
+	})
+
+	t.Run("Almost Circular conflict - all RW edges. No cycle because a transaction aborts", func(t *testing.T) {
+		_, transactionManager, err := runTest("resources/test37.txt")
+		if err != nil {
+			fmt.Printf("Error: %v", err)
+			t.Fatal(err)
+		}
+		tx1, _, _ := transactionManager.GetTransaction(1)
+		tx2, _, _ := transactionManager.GetTransaction(2)
+		tx3, _, _ := transactionManager.GetTransaction(3)
+		tx4, _, _ := transactionManager.GetTransaction(4)
+		tx5, _, _ := transactionManager.GetTransaction(5)
+		assert.Equal(t, domain.TxCommitted, tx1.GetState())
+		assert.Equal(t, domain.TxCommitted, tx2.GetState())
+		assert.Equal(t, domain.TxAborted, tx3.GetState())
+		assert.Equal(t, domain.TxCommitted, tx4.GetState())
+		assert.Equal(t, domain.TxCommitted, tx5.GetState())
+	})
+
+	t.Run("Write conflcit, first commit wins", func(t *testing.T) {
+		_, transactionManager, err := runTest("resources/test38.txt")
+		if err != nil {
+			fmt.Printf("Error: %v", err)
+			t.Fatal(err)
+		}
+		tx1, _, _ := transactionManager.GetTransaction(1)
+		tx2, _, _ := transactionManager.GetTransaction(2)
+		assert.Equal(t, domain.TxCommitted, tx1.GetState())
+		assert.Equal(t, domain.TxAborted, tx2.GetState())
+	})
+
+	t.Run("Simple R-W cycle - cycle closing transaction aborts", func(t *testing.T) {
+		_, transactionManager, err := runTest("resources/test39.txt")
+		if err != nil {
+			fmt.Printf("Error: %v", err)
+			t.Fatal(err)
+		}
+		tx1, _, _ := transactionManager.GetTransaction(1)
+		tx2, _, _ := transactionManager.GetTransaction(2)
+		assert.Equal(t, domain.TxCommitted, tx1.GetState())
+		assert.Equal(t, domain.TxAborted, tx2.GetState())
+	})
+
+	t.Run("R-W cycle - cycle closing transaction with WW aborts", func(t *testing.T) {
+		_, transactionManager, err := runTest("resources/test40.txt")
+		if err != nil {
+			fmt.Printf("Error: %v", err)
+			t.Fatal(err)
+		}
+		tx1, _, _ := transactionManager.GetTransaction(1)
+		tx2, _, _ := transactionManager.GetTransaction(2)
+		tx3, _, _ := transactionManager.GetTransaction(3)
+		assert.Equal(t, domain.TxCommitted, tx1.GetState())
+		assert.Equal(t, domain.TxCommitted, tx2.GetState())
+		assert.Equal(t, domain.TxAborted, tx3.GetState())
+	})
+
+	t.Run("Read should abort immediately if no valid site for read on replicated site", func(t *testing.T) {
+		_, transactionManager, err := runTest("resources/test41.txt")
+		if err != nil {
+			fmt.Printf("Error: %v", err)
+			t.Fatal(err)
+		}
+		tx1, _, _ := transactionManager.GetTransaction(1)
+		tx2, _, _ := transactionManager.GetTransaction(2)
+		tx3, _, _ := transactionManager.GetTransaction(3)
+		assert.Equal(t, domain.TxCommitted, tx1.GetState())
+		assert.Equal(t, domain.TxCommitted, tx2.GetState())
+		assert.Equal(t, domain.TxAborted, tx3.GetState())
+	})
+
+	t.Run("Read should abort immediately if no valid site for read on replicated site (part 2)", func(t *testing.T) {
+		_, transactionManager, err := runTest("resources/test42.txt")
+		if err != nil {
+			fmt.Printf("Error: %v", err)
+			t.Fatal(err)
+		}
+		tx1, _, _ := transactionManager.GetTransaction(1)
+		tx2, _, _ := transactionManager.GetTransaction(2)
+		tx3, _, _ := transactionManager.GetTransaction(3)
+		tx4, _, _ := transactionManager.GetTransaction(4)
+		assert.Equal(t, domain.TxCommitted, tx1.GetState())
+		assert.Equal(t, domain.TxCommitted, tx2.GetState())
+		assert.Equal(t, domain.TxAborted, tx3.GetState())
+		assert.Equal(t, domain.TxCommitted, tx4.GetState())
+	})
+
+	t.Run("Read should wait if valid site exists but is down for read on replicated site", func(t *testing.T) {
+		siteCoordinator, transactionManager, err := runTest("resources/test43.txt")
+		if err != nil {
+			fmt.Printf("Error: %v", err)
+			t.Fatal(err)
+		}
+		tx1, _, _ := transactionManager.GetTransaction(1)
+		tx2, _, _ := transactionManager.GetTransaction(2)
+		tx3, _, _ := transactionManager.GetTransaction(3)
+		tx4, _, _ := transactionManager.GetTransaction(4)
+		assert.Equal(t, domain.TxCommitted, tx1.GetState())
+		assert.Equal(t, domain.TxCommitted, tx2.GetState())
+		assert.Equal(t, domain.TxCommitted, tx4.GetState())
+		assert.Equal(t, domain.TxWaiting, tx3.GetState())
+		siteCoordinator.Recover(2, 24)
+		transactionManager.Recover(2, 24)
+		tx3Read, _ := transactionManager.Read(3, 8, 25)
+		assert.Equal(t, 88, tx3Read.Value)
+		transactionManager.End(3, 26)
+		tx3, _, _ = transactionManager.GetTransaction(3)
+		assert.Equal(t, domain.TxCommitted, tx3.GetState())
+	})
 }

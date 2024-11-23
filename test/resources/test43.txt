@@ -24,7 +24,9 @@ begin(T3)
 fail(2)
 begin(T4)
 W(T4,x8,99)
-end(T4)                    
+end(T4)               
 R(T3,x8)                               // T3 should now wait for site 2
+/*
 recover(2)                            // T3 will be unblocked here
 end(T3)
+*/

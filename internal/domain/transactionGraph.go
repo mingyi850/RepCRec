@@ -74,10 +74,26 @@ func (t *TransactionGraph) RemoveNode(tx int) {
 }
 
 func (t *TransactionGraph) PurgeGraph(earliestStart int) {
+	deletedNodes := false
 	for tx, time := range t.commitTimes {
 		if time < earliestStart {
-			t.RemoveNode(tx)
+			//Check if transaction has any active incoming edges - cannot delete if so.
+			hasIncomingEdges := false
+			for _, edges := range t.graph {
+				if _, exists := edges[tx]; exists {
+					hasIncomingEdges = true
+					break
+				}
+			}
+			if !hasIncomingEdges {
+				t.RemoveNode(tx)
+				deletedNodes = true
+			}
 		}
+	}
+	if deletedNodes {
+		// Recursively delete nodes until none can be deleted
+		t.PurgeGraph(earliestStart)
 	}
 }
 
