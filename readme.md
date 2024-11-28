@@ -5,6 +5,8 @@ This project aims to implement a simple K-V distributed database with serializab
 
 ## Running the Project
 The project is written in golang.
+
+### Running the project directly
 To run the project, ensure you have golang installed
 
 1. Build the binary
@@ -23,6 +25,61 @@ To run the project, ensure you have golang installed
     ```
     ./repcrec <inputfile>
     ```
+
+## Running the project using [reprounzip](https://github.com/VIDA-NYU/reprozip)
+Reprozip is a packaging tool which ensures portability across environments. Reprounzip is the counterpart which unpacks packages packaged by Reprozip and allows them to be run in any environment.
+
+The ```repro-repcrec.rpz``` file was packaged on NYU Courant's CIMS cluster.
+
+In both methods of running the project, the project is started in interactive mode. In order to provide  input from a file, please follow the instructions below
+
+### Running on Linux using Reprozip
+Running the project on a Linux machine is the simplest way. No additional dependencies are required.
+
+1. Install reprounzip
+	``` 
+	pip install reprounzip 
+	```
+2. Unpack reprozip package
+	```
+	reprounzip directory setup repro-repcrec.rpz <directory_name>
+	```
+3. Run project in interactive mode
+	```
+	reprounzip directory run <directory_name>
+	```
+	This should start the database in interactive mode
+
+4. To run the project with an provided input file, use 
+	```
+	cat <input_file> | reprounzip docker run <directory_name>
+	```
+
+### Running on Windows or OSx using Docker
+To run the project on Windows or OSx, the most straightforward way will be to use docker.
+Ensure that the docker daemon is running before using `reprounzip-docker` commands
+
+1. Install reprounzip and reprounzip-docker
+	```
+	pip install reprounzip reprounzip-docker
+	```
+2. Unpack reprozip package - This creates as docker container which will be used to run the project
+	```
+	reprounzip docker setup repro-repcrec.rpz <directory_name>
+	```
+3. Run the project in interactive mode - This spins up a docker container
+	```
+	reprounzip docker run <directory_name>
+	```
+
+4. Run the project using a file
+	```
+	(cat <input_file> ; echo "exit") | reprounzip docker run <directory_name>
+	```
+	The `exit` command is neccesary to stop the simulation in interactive mode. Since running the project in reprozip automatically starts it in interactive mode, this step is neccesary
+	
+
+
 
 The program will output each line from the input, followed by the outcome of the operation. If any error is encountered during the parasing of the file or the operation of the program, it will terminate with the specified error.
 
@@ -82,6 +139,12 @@ The transaction Graph is represented as a directed graph, with nodes represented
 type TransactionGraph struct {
 	graph map[int]map[int]ConflictType
 }
+
+When a transaction completes (end command is issued) we check the transaction graph for potential conflicts. If we obtain a RW-RW cycle in the transaction graph, the transaction is aborted.
+
+During this time, we also recursively purge the transaction graph of any outdated transactions which committed before the earliest start time, and are not part of any other dependencies. 
+
+When a transaction is successfully committed, we add all dependencies to the transaction graph.
 
 ### Site Coordinator
 The site coordinator keeps track of the uptime and history of each site, as well as it's current status. It also helps to retrieve relevant sites for the transaction manager.
